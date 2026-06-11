@@ -42,6 +42,8 @@ const paperSchema = new mongoose.Schema(
       openalex: String,
       semanticScholar: String,
       crossref: String,
+      ieee: String,
+      exa: String,
       pubmed: String,
     },
 
@@ -88,7 +90,7 @@ const paperSchema = new mongoose.Schema(
     // Metadata
     source: {
       type: String,
-      enum: ['openalex', 'semantic_scholar', 'crossref'],
+      enum: ['openalex', 'semantic_scholar', 'crossref', 'ieee', 'exa'],
       required: true,
     },
     url: String,

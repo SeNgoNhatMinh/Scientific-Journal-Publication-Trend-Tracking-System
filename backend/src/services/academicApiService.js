@@ -11,18 +11,27 @@ const normalizeSource = source => {
   if (value === 'openalex') return 'openalex';
   if (value === 'semanticscholar' || value === 'semantic') return 'semanticscholar';
   if (value === 'crossref') return 'crossref';
+  if (value === 'ieee' || value === 'ieeexplore') return 'ieee';
+  if (value === 'exa') return 'exa';
 
   throw new Error(`Unsupported source: ${source}`);
 };
 
 const buildHeaders = source => {
-  if (source !== 'semanticscholar' || !envConfig.SEMANTIC_SCHOLAR_API_KEY) {
-    return {};
+  if (source === 'semanticscholar' && envConfig.SEMANTIC_SCHOLAR_API_KEY) {
+    return {
+      'x-api-key': envConfig.SEMANTIC_SCHOLAR_API_KEY,
+    };
   }
 
-  return {
-    'x-api-key': envConfig.SEMANTIC_SCHOLAR_API_KEY,
-  };
+  if (source === 'exa' && envConfig.EXA_API_KEY) {
+    return {
+      'x-api-key': envConfig.EXA_API_KEY,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  return {};
 };
 
 const apiTimeout = envConfig.EXTERNAL_API_TIMEOUT_MS;
@@ -48,11 +57,39 @@ const openAlexClient = axios.create({
   },
 });
 
+const ieeeClient = axios.create({
+  baseURL: envConfig.IEEE_API_URL,
+  timeout: apiTimeout,
+});
+
+const exaClient = axios.create({
+  baseURL: envConfig.EXA_API_URL,
+  timeout: apiTimeout,
+});
+
 /** OpenAlex polite pool: https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication */
 const withOpenAlexParams = params => ({
   ...params,
   mailto: envConfig.OPENALEX_MAILTO,
 });
+
+const toProviderError = (source, error) => {
+  const statusCode = error.response?.status || 500;
+  const body = error.response?.data;
+  const bodyText = typeof body === 'string' ? body : JSON.stringify(body || {});
+
+  let message = `${source} request failed: ${error.message}`;
+  if (statusCode === 401 || statusCode === 403) {
+    message = `${source} rejected the request. Check that the API key is active and allowed for this endpoint.`;
+  }
+  if (/Developer Inactive/i.test(bodyText)) {
+    message = `${source} rejected the request: Developer Inactive. Activate the IEEE developer account/key before using this source.`;
+  }
+
+  const providerError = new Error(message);
+  providerError.statusCode = statusCode;
+  throw providerError;
+};
 
 const normalizePaper = (source, paper) => {
   if (source === 'openalex') {
@@ -93,6 +130,50 @@ const normalizePaper = (source, paper) => {
     };
   }
 
+  if (source === 'ieee') {
+    const publicationYear = paper.publication_year
+      ? parseInt(paper.publication_year, 10)
+      : paper.publication_date
+        ? parseInt(String(paper.publication_date).slice(0, 4), 10)
+        : null;
+
+    return {
+      id: paper.article_number || paper.doi || paper.pdf_url || paper.html_url,
+      title: paper.title,
+      abstract: paper.abstract || null,
+      doi: paper.doi || null,
+      publishedDate: paper.publication_date || null,
+      publicationYear: Number.isNaN(publicationYear) ? null : publicationYear,
+      citationCount: paper.citing_paper_count || paper.citing_patent_count || 0,
+      authors: (paper.authors?.authors || paper.authors || []).map(author => ({
+        authorId: author.id || author.affiliation || null,
+        name: author.full_name || author.name,
+      })),
+      journalName: paper.publication_title || paper.publisher || null,
+      url: paper.html_url || paper.pdf_url || paper.doi ? (paper.html_url || paper.pdf_url || `https://doi.org/${paper.doi}`) : null,
+      source: 'ieee',
+    };
+  }
+
+  if (source === 'exa') {
+    const publishedDate = paper.publishedDate || paper.published_date || null;
+    const publicationYear = publishedDate ? parseInt(String(publishedDate).slice(0, 4), 10) : null;
+
+    return {
+      id: paper.id || paper.url,
+      title: paper.title,
+      abstract: paper.text || paper.summary || paper.highlights?.join(' ') || null,
+      doi: null,
+      publishedDate,
+      publicationYear: Number.isNaN(publicationYear) ? null : publicationYear,
+      citationCount: 0,
+      authors: paper.author ? [{ authorId: null, name: paper.author }] : [],
+      journalName: null,
+      url: paper.url,
+      source: 'exa',
+    };
+  }
+
   return {
     id: paper.DOI || paper.doi || paper.URL,
     title: Array.isArray(paper.title) ? paper.title[0] : paper.title,
@@ -125,6 +206,12 @@ const searchPapers = async (source, keyword, options = {}) => {
 
   if (normalizedSource === 'semanticscholar' && !envConfig.SEMANTIC_SCHOLAR_API_KEY) {
     throw new Error('SEMANTIC_SCHOLAR_API_KEY is required for Semantic Scholar requests');
+  }
+  if (normalizedSource === 'ieee' && !envConfig.IEEE_API_KEY) {
+    throw new Error('IEEE_API_KEY is required for IEEE Xplore requests');
+  }
+  if (normalizedSource === 'exa' && !envConfig.EXA_API_KEY) {
+    throw new Error('EXA_API_KEY is required for Exa requests');
   }
 
   if (normalizedSource === 'openalex') {
@@ -169,6 +256,69 @@ const searchPapers = async (source, keyword, options = {}) => {
       source: normalizedSource,
       total: response.data.total || papers.length,
       papers,
+    };
+  }
+
+  if (normalizedSource === 'ieee') {
+    let response;
+    try {
+      response = await ieeeClient.get('/api/v1/search/articles', {
+        params: {
+          apikey: envConfig.IEEE_API_KEY,
+          format: 'json',
+          querytext: keyword,
+          max_records: Math.min(limit, 25),
+          start_record: (page - 1) * limit + 1,
+          ...(year ? { start_year: year, end_year: year } : {}),
+        },
+      });
+    } catch (error) {
+      toProviderError('IEEE Xplore', error);
+    }
+
+    const articles = response.data.articles || [];
+    return {
+      source: normalizedSource,
+      total: parseInt(response.data.total_records, 10) || articles.length,
+      papers: articles.map(paper => normalizePaper('ieee', paper)),
+    };
+  }
+
+  if (normalizedSource === 'exa') {
+    let response;
+    try {
+      response = await exaClient.post(
+        '/search',
+        {
+          query: keyword,
+          type: 'auto',
+          category: 'research paper',
+          numResults: Math.min(limit, 25),
+          contents: {
+            text: {
+              maxCharacters: 1200,
+            },
+          },
+          ...(year
+            ? {
+                startPublishedDate: `${year}-01-01T00:00:00.000Z`,
+                endPublishedDate: `${year}-12-31T23:59:59.999Z`,
+              }
+            : {}),
+        },
+        {
+          headers: buildHeaders(normalizedSource),
+        }
+      );
+    } catch (error) {
+      toProviderError('Exa', error);
+    }
+
+    const results = response.data.results || [];
+    return {
+      source: normalizedSource,
+      total: results.length,
+      papers: results.map(paper => normalizePaper('exa', paper)),
     };
   }
 
@@ -277,6 +427,12 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
     );
 
     return { source: normalizedSource, keyword, trends };
+  }
+
+  if (normalizedSource !== 'crossref') {
+    const error = new Error(`Trend data is not supported for source: ${normalizedSource}`);
+    error.statusCode = 400;
+    throw error;
   }
 
   const response = await crossrefClient.get('/works', {

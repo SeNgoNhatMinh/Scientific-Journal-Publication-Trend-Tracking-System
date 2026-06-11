@@ -65,11 +65,11 @@ Prefix: `/api/v1` trừ `/health` và `/api-docs`.
 | 3 | POST | `/auth/register` | Không | PASS | 201 hoặc 409 |
 | 4 | POST | `/auth/login` | Không | PASS | Trả `token` |
 | 5 | GET | `/auth/me` | JWT | PASS | |
-| 6 | GET | `/sources/search` | Không | PASS | Query: `keyword`, `limit`, `source` |
+| 6 | GET | `/sources/search` | Không | PASS | `source`: `openalex`, `semanticscholar`, `crossref`, `ieee`, `exa` |
 | 7 | GET | `/sources/trend` | Không | PASS | `keyword`, `startYear` |
 | 8 | GET | `/sources/journal` | Không | PASS | `query` |
 | 9 | GET | `/sources/author` | Không | PASS | `query` |
-| 10 | GET | `/papers/search` | Không | PASS | Live OpenAlex |
+| 10 | GET | `/papers/search` | Không | PASS | Tìm paper đã lưu trong MongoDB |
 | 11 | GET | `/papers/bookmarks` | JWT | PASS* | *Sau redeploy BE (fix route + fallback) |
 | 12 | GET | `/papers/{paperId}` | Không | — | Cần ObjectId Mongo hợp lệ |
 | 13 | POST | `/papers` | JWT | PASS | Body bắt buộc `paper.source` |
@@ -88,8 +88,11 @@ Prefix: `/api/v1` trừ `/health` và `/api-docs`.
 | 26 | POST | `/trends/compare` | Không | PASS | Body: `keywords[]` |
 | 27 | GET | `/trends/emerging` | Không | PASS | Có thể `topics: []` nếu chưa corpus |
 | 28 | GET | `/trends/trending` | Không | PASS | |
-| 29 | GET | `/trends/topics/{topicId}` | Không | — | |
-| 30 | GET | `/ai/health` | Không | PASS | Proxy AI |
+| 29 | GET | `/trends/keyword-categories` | Không | PASS | Keyword theo `domain/algorithm/application/...` |
+| 30 | GET | `/trends/keyword-graph` | Không | PASS | Nodes/edges cho graph |
+| 31 | GET | `/trends/algorithm-domains` | Không | PASS | Cặp thuật toán-domain |
+| 32 | GET | `/trends/topics/{topicId}` | Không | — | |
+| 33 | GET | `/ai/health` | Không | PASS | Proxy AI |
 | 31 | POST | `/ai/embeddings/embed` | Không | PASS | Body: `{ text }` |
 | 32 | POST | `/ai/embeddings/embed-batch` | Không | PASS | `{ texts: [] }` |
 | 33 | POST | `/ai/embeddings/similarity` | Không | PASS | `{ text1, text2 }` |
@@ -126,7 +129,7 @@ sequenceDiagram
 ```
 
 1. Đăng nhập → lưu JWT  
-2. Tìm kiếm live: `GET /sources/search` hoặc `GET /papers/search`  
+2. Tìm kiếm live: `GET /sources/search`; tìm paper đã lưu/corpus: `GET /papers/search`  
 3. Bắt đầu corpus: `POST /corpus/runs` → poll `GET /corpus/runs/{runId}` đến `completed`  
 4. Dashboard: `GET /corpus/runs/{id}/papers`, `GET /trends/emerging?analysisRunId=...`  
 5. Theo dõi corpus: `POST /corpus/runs/{id}/follow` → nhận thông báo khi `completed` / emerging  
@@ -233,7 +236,9 @@ curl -s -X POST $API/papers \
 |------------------|-------------|------------|
 | CORS | `CORS_ORIGIN` BE chưa có URL FE | Nhờ BE thêm origin Vercel/local vào Railway Variables |
 | 401 | Thiếu/sai JWT | Login lại, header `Authorization: Bearer ...` |
-| 504 / timeout search | OpenAlex chậm (>90s) | `limit=5`, retry; hiển thị loading |
+| 504 / timeout search | API nguồn ngoài chậm (>90s) | `limit=5`, retry; hiển thị loading |
+| 403 / source key rejected | API key sai hoặc chưa active | Kiểm tra biến môi trường và trạng thái key |
+| 429 / rate limit | API nguồn ngoài giới hạn request | Chờ rồi retry, giảm `limit` |
 | `topics: []` emerging | Chưa corpus hoặc chưa `completed` | Chạy `POST /corpus/runs` + poll |
 | AI unavailable | `AI_SERVICE_URL` sai trên BE | BE set `https://lavish-adventure-production-dd7f.up.railway.app` |
 | 500 bookmarks | Production chưa deploy bản mới | Redeploy backend (route + fallback trong controller) |
@@ -261,7 +266,7 @@ chmod +x scripts/test-production.sh
 
 - [ ] `VITE_API_BASE_URL` trỏ production `/api/v1`
 - [ ] Login + JWT trên mọi route protected
-- [ ] Search có loading (OpenAlex 1–90s)
+- [ ] Search có loading (API ngoài 1–90s)
 - [ ] Corpus: UI poll `status` đến `completed` / `failed`
 - [ ] Không hardcode `localhost` trong build production
 - [ ] Xử lý `success: false` và `message` từ API

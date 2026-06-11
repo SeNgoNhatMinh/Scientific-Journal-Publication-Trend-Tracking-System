@@ -1,5 +1,6 @@
 const Author = require('../models/Author');
 const Keyword = require('../models/Keyword');
+const keywordClassificationService = require('./keywordClassificationService');
 
 const normalizeKeywordText = text =>
   String(text || '')
@@ -11,14 +12,30 @@ const upsertKeyword = async (text, source = 'openalex') => {
   const normalizedText = normalizeKeywordText(text);
   if (!normalizedText) return null;
 
+  const classification = keywordClassificationService.classifyKeyword(normalizedText);
   let keyword = await Keyword.findOne({ normalizedText });
   if (!keyword) {
     keyword = await Keyword.create({
       name: normalizedText,
       normalizedText,
       source,
+      category: classification.category,
+      classificationConfidence: classification.confidence,
+      classifiedBy: classification.classifiedBy,
+      lastClassifiedAt: new Date(),
       lastUpdatedAt: new Date(),
     });
+  } else if (
+    keyword.classifiedBy === 'unknown' ||
+    !keyword.lastClassifiedAt ||
+    keyword.category === 'general'
+  ) {
+    keyword.category = classification.category;
+    keyword.classificationConfidence = classification.confidence;
+    keyword.classifiedBy = classification.classifiedBy;
+    keyword.lastClassifiedAt = new Date();
+    keyword.lastUpdatedAt = new Date();
+    await keyword.save();
   }
   return keyword;
 };
@@ -66,11 +83,49 @@ const upsertAuthors = async authorEntries => {
 
 const linkPaperKeywords = async keywordTexts => {
   const keywordIds = [];
+  const seen = new Set();
   for (const text of keywordTexts || []) {
+    const normalizedText = normalizeKeywordText(text);
+    if (!normalizedText || seen.has(normalizedText)) continue;
+    seen.add(normalizedText);
+
     const kw = await upsertKeyword(text);
-    if (kw) keywordIds.push(kw._id);
+    if (kw) {
+      await Keyword.findByIdAndUpdate(kw._id, {
+        $inc: { paperCount: 1 },
+        $set: { lastUpdatedAt: new Date() },
+      });
+      keywordIds.push(kw._id);
+    }
   }
   return keywordIds;
+};
+
+const classifyExistingKeywords = async (limit = 1000) => {
+  const keywords = await Keyword.find({
+    $or: [
+      { category: { $exists: false } },
+      { classifiedBy: { $exists: false } },
+      { classifiedBy: 'unknown' },
+      { lastClassifiedAt: null },
+    ],
+  })
+    .limit(limit)
+    .select('name normalizedText category classifiedBy lastClassifiedAt');
+
+  for (const keyword of keywords) {
+    const classification = keywordClassificationService.classifyKeyword(
+      keyword.normalizedText || keyword.name
+    );
+    keyword.category = classification.category;
+    keyword.classificationConfidence = classification.confidence;
+    keyword.classifiedBy = classification.classifiedBy;
+    keyword.lastClassifiedAt = new Date();
+    keyword.lastUpdatedAt = new Date();
+    await keyword.save();
+  }
+
+  return keywords.length;
 };
 
 module.exports = {
@@ -78,4 +133,5 @@ module.exports = {
   upsertKeyword,
   upsertAuthors,
   linkPaperKeywords,
+  classifyExistingKeywords,
 };

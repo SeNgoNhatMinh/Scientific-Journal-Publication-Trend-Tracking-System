@@ -4,7 +4,7 @@ const apiSourceSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      enum: ['openalex', 'semantic_scholar', 'crossref'],
+      enum: ['openalex', 'semantic_scholar', 'crossref', 'ieee', 'exa'],
       required: true,
       unique: true,
     },

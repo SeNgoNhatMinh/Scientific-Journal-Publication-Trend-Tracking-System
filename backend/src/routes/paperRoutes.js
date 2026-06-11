@@ -11,8 +11,8 @@ const router = express.Router();
  *     tags:
  *       - Papers
  *     security: []
- *     summary: Tìm kiếm bài báo học thuật
- *     description: Search papers from OpenAlex by keyword
+ *     summary: Tìm kiếm bài báo đã lưu trong database
+ *     description: Search locally saved papers from MongoDB. Use /sources/search for live external search.
  *     parameters:
  *       - in: query
  *         name: keyword
@@ -35,10 +35,22 @@ const router = express.Router();
  *         schema:
  *           type: integer
  *       - in: query
+ *         name: source
+ *         schema:
+ *           type: string
+ *           enum: [openalex, semantic_scholar, crossref, ieee, exa]
+ *         description: Optional local database source filter
+ *       - in: query
+ *         name: analysisRunId
+ *         schema:
+ *           type: string
+ *         description: Optional corpus run filter
+ *       - in: query
  *         name: sortBy
  *         schema:
  *           type: string
- *           default: cited_by_count
+ *           enum: [relevance, citations, newest, oldest]
+ *           default: relevance
  *     responses:
  *       200:
  *         description: Papers found

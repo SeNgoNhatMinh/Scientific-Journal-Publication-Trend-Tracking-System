@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const envConfig = require('./env');
 const ApiSource = require('../models/ApiSource');
+const authorKeywordService = require('../services/authorKeywordService');
 
 const DEFAULT_API_SOURCES = [
   {
@@ -25,6 +26,24 @@ const DEFAULT_API_SOURCES = [
     name: 'crossref',
     baseUrl: 'https://api.crossref.org',
     fieldScope: ['works'],
+    syncFrequency: 'weekly',
+    trendingThreshold: 20,
+    minPaperCount: 10,
+    isActive: true,
+  },
+  {
+    name: 'ieee',
+    baseUrl: 'https://ieeexploreapi.ieee.org',
+    fieldScope: ['articles'],
+    syncFrequency: 'weekly',
+    trendingThreshold: 20,
+    minPaperCount: 10,
+    isActive: true,
+  },
+  {
+    name: 'exa',
+    baseUrl: 'https://api.exa.ai',
+    fieldScope: ['search'],
     syncFrequency: 'weekly',
     trendingThreshold: 20,
     minPaperCount: 10,
@@ -75,6 +94,12 @@ const connectDB = async () => {
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
     await seedApiSources();
+    authorKeywordService
+      .classifyExistingKeywords()
+      .then(count => {
+        if (count > 0) console.log(`Keyword classification backfilled: ${count}`);
+      })
+      .catch(err => console.error(`Keyword classification backfill failed: ${err.message}`));
     return conn;
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message}`);

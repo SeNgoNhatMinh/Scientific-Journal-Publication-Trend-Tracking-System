@@ -116,7 +116,7 @@ Mở http://localhost:3001/api-docs (refresh sau khi sửa code).
 
 | Nhóm | Endpoint | Ghi chú |
 |------|----------|---------|
-| Nguồn dữ liệu | `GET /sources/search` | Bắt buộc `keyword=AI`, `source=openalex` |
+| Nguồn dữ liệu | `GET /sources/search` | Bắt buộc `keyword=AI`; `source=openalex`, `semanticscholar`, `crossref`, `ieee`, `exa` |
 | Xu hướng | `GET /trends/keyword` | Query `keyword=machine learning` |
 | Dịch vụ AI | `GET /ai/health` | Cần AI chạy cổng 8000 |
 | Dịch vụ AI | `POST /ai/embeddings/embed` | Body: `{"text":"machine learning"}` |

@@ -53,6 +53,33 @@ const analysisRunSchema = new mongoose.Schema(
     },
     emergenceScore: { type: Number, default: 0 },
     isEmerging: { type: Boolean, default: false },
+    keywordCategorySummary: {
+      byCategory: {
+        type: Map,
+        of: Number,
+        default: {},
+      },
+      topAlgorithms: [{
+        keywordId: { type: mongoose.Schema.Types.ObjectId, ref: 'Keyword' },
+        name: String,
+        paperCount: Number,
+      }],
+      topDomains: [{
+        keywordId: { type: mongoose.Schema.Types.ObjectId, ref: 'Keyword' },
+        name: String,
+        paperCount: Number,
+      }],
+      topApplications: [{
+        keywordId: { type: mongoose.Schema.Types.ObjectId, ref: 'Keyword' },
+        name: String,
+        paperCount: Number,
+      }],
+      algorithmDomainPairs: [{
+        algorithm: String,
+        domain: String,
+        paperCount: Number,
+      }],
+    },
 
     topicId: {
       type: mongoose.Schema.Types.ObjectId,

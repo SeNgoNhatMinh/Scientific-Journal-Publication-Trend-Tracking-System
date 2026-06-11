@@ -7,11 +7,16 @@ const errorHandler = (err, req, res, next) => {
   const isTimeout =
     err.code === 'ECONNABORTED' || /timeout.*exceeded/i.test(err.message || '');
   const isCastError = err.name === 'CastError';
+  const providerStatus = err.response?.status;
   const statusCode =
-    err.statusCode || (isTimeout ? 504 : isCastError ? 400 : 500);
-  const message = isTimeout
+    err.statusCode || providerStatus || (isTimeout ? 504 : isCastError ? 400 : 500);
+  let message = isTimeout
     ? 'External API (OpenAlex, etc.) timed out. Retry with a shorter query or try again later.'
     : err.message || 'Internal Server Error';
+
+  if (providerStatus === 429) {
+    message = 'External academic API rate limit exceeded. Please wait and retry with a smaller request.';
+  }
 
   console.error(`[ERROR] ${statusCode} - ${message}`);
   console.error(err);

@@ -43,6 +43,34 @@ const keywordSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Keyword',
     }],
+    aliasTexts: [{
+      type: String,
+      lowercase: true,
+      trim: true,
+    }],
+
+    // Classification for trend analysis dashboards
+    category: {
+      type: String,
+      enum: ['domain', 'algorithm', 'application', 'method', 'dataset', 'tool', 'general'],
+      default: 'general',
+      index: true,
+    },
+    classificationConfidence: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
+    classifiedBy: {
+      type: String,
+      enum: ['rule', 'manual', 'ai', 'unknown'],
+      default: 'unknown',
+    },
+    lastClassifiedAt: {
+      type: Date,
+      default: null,
+    },
     
     // Usage Metrics
     paperCount: {

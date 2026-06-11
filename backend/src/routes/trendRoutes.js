@@ -105,6 +105,96 @@ router.get('/trending', trendController.getTrendingTopics);
 
 /**
  * @swagger
+ * /trends/keyword-categories:
+ *   get:
+ *     tags:
+ *       - Trends
+ *     security: []
+ *     summary: Thống kê keyword theo loại
+ *     description: Returns locally stored keywords grouped by category. Optional analysisRunId narrows results to one corpus run.
+ *     parameters:
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: [domain, algorithm, application, method, dataset, tool, general]
+ *       - in: query
+ *         name: analysisRunId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *     responses:
+ *       200:
+ *         description: Keyword category stats retrieved
+ */
+router.get('/keyword-categories', trendController.getKeywordCategories);
+
+/**
+ * @swagger
+ * /trends/keyword-graph:
+ *   get:
+ *     tags:
+ *       - Trends
+ *     security: []
+ *     summary: Lấy graph đồng xuất hiện keyword
+ *     description: Returns nodes and edges for keyword co-occurrence visualization from locally stored papers.
+ *     parameters:
+ *       - in: query
+ *         name: analysisRunId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: paperLimit
+ *         schema:
+ *           type: integer
+ *           default: 300
+ *     responses:
+ *       200:
+ *         description: Keyword graph retrieved
+ */
+router.get('/keyword-graph', trendController.getKeywordGraph);
+
+/**
+ * @swagger
+ * /trends/algorithm-domains:
+ *   get:
+ *     tags:
+ *       - Trends
+ *     security: []
+ *     summary: Lấy cặp thuật toán và domain
+ *     description: Returns algorithm-domain co-occurrence pairs from locally stored papers.
+ *     parameters:
+ *       - in: query
+ *         name: analysisRunId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: paperLimit
+ *         schema:
+ *           type: integer
+ *           default: 500
+ *     responses:
+ *       200:
+ *         description: Algorithm-domain pairs retrieved
+ */
+router.get('/algorithm-domains', trendController.getAlgorithmDomains);
+
+/**
+ * @swagger
  * /trends/topics/{topicId}:
  *   get:
  *     tags:

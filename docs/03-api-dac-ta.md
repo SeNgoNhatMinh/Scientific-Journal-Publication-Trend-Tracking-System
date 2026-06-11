@@ -40,7 +40,7 @@ Backend cung cấp ba lớp chức năng:
 
 | Lớp | Prefix | Mô tả |
 |-----|--------|-------|
-| **Truy vấn trực tiếp** | `/sources`, `/trends/keyword` | Gọi thời gian thực tới OpenAlex, Semantic Scholar, Crossref |
+| **Truy vấn trực tiếp** | `/sources`, `/trends/keyword` | Gọi thời gian thực tới OpenAlex, Semantic Scholar, Crossref, IEEE, Exa |
 | **Theo dõi corpus** | `/corpus` | Thu thập bài báo vào MongoDB, tính xu hướng theo năm, tạo bằng chứng `Topic` |
 | **AI** | `/ai` | Proxy tới Python FastAPI (embedding, gợi ý, tóm tắt) |
 
@@ -64,7 +64,7 @@ Backend cung cấp ba lớp chức năng:
 
 Biến Railway backend: `AI_SERVICE_URL` trỏ domain AI; `OPENALEX_MAILTO` (email hợp lệ); `EXTERNAL_API_TIMEOUT_MS=90000` (mặc định production).
 
-**Lưu ý:** Tìm kiếm live qua OpenAlex có thể mất **30–90 giây**; vượt timeout trả **`504`**. Chi tiết test: [05-huong-dan-fe.md](05-huong-dan-fe.md).
+**Lưu ý:** Tìm kiếm live qua API ngoài có thể mất **30–90 giây**; vượt timeout trả **`504`**. Chi tiết test: [05-huong-dan-fe.md](05-huong-dan-fe.md).
 
 ---
 
@@ -126,8 +126,10 @@ Khi chấp nhận `source`:
 | `openalex` | OpenAlex (mặc định, không cần key) |
 | `semanticscholar` | Semantic Scholar (yêu cầu `SEMANTIC_SCHOLAR_API_KEY`) |
 | `crossref` | Crossref (yêu cầu `CROSSREF_MAILTO`) |
+| `ieee` | IEEE Xplore Metadata API (yêu cầu `IEEE_API_KEY`) |
+| `exa` | Exa Search API, category research paper (yêu cầu `EXA_API_KEY`) |
 
-Alias: `semantic`, `semantic_scholar` → chuẩn hóa thành `semanticscholar`.
+Alias: `semantic`, `semantic_scholar` → `semanticscholar`; `ieeexplore` → `ieee`.
 
 ### Nhãn trạng thái xu hướng
 
@@ -274,6 +276,7 @@ Tất cả endpoint truy vấn API bên ngoài trực tiếp (không cần corpu
 ### `GET /sources/search`
 
 Tìm kiếm bài báo học thuật.
+Hỗ trợ: `openalex`, `semanticscholar`, `crossref`, `ieee`, `exa`.
 
 **Auth:** Không
 
@@ -762,6 +765,36 @@ Chủ đề có `trendStatus` là `exploding` hoặc `growing`.
 
 ---
 
+### `GET /trends/keyword-categories`
+
+Thống kê keyword đã lưu theo loại (`domain`, `algorithm`, `application`, `method`, `dataset`, `tool`, `general`).
+
+**Auth:** Không
+
+**Query:** `category`, `analysisRunId`, `limit`
+
+---
+
+### `GET /trends/keyword-graph`
+
+Graph đồng xuất hiện keyword từ paper đã lưu. FE dùng `nodes` và `edges` để vẽ mô hình graph.
+
+**Auth:** Không
+
+**Query:** `analysisRunId`, `limit`, `paperLimit`, `year`, `source`
+
+---
+
+### `GET /trends/algorithm-domains`
+
+Danh sách cặp thuật toán-domain cùng xuất hiện, dùng để trả lời “thuật toán nào đang nổi trong domain nào”.
+
+**Auth:** Không
+
+**Query:** `analysisRunId`, `limit`, `paperLimit`, `year`, `source`
+
+---
+
 ### `GET /trends/topics/{topicId}`
 
 Chi tiết topic kèm bài báo đã populate.
@@ -793,11 +826,14 @@ Base: `/api/v1/papers`
 
 ### `GET /papers/search`
 
-Cùng hành vi với `GET /sources/search` (tìm kiếm ngoài trực tiếp).
+Tìm kiếm bài báo đã lưu trong MongoDB (paper được lưu thủ công hoặc sinh từ corpus).
+Nếu cần tìm kiếm live từ OpenAlex / Semantic Scholar / Crossref / IEEE / Exa, dùng `GET /sources/search`.
 
 **Auth:** Không
 
-**Query:** `keyword`, `source`, `page`, `limit`, `year`
+**Query:** `keyword`, `page`, `limit`, `year`, `source`, `analysisRunId`, `sortBy`
+
+**Response `200`:** `source: "local_database"`, `papers`, `pagination`
 
 ---
 
@@ -1056,6 +1092,10 @@ Bài báo học thuật; bài corpus bao gồm `analysisRunId`. Chỉ mục dedu
 
 Chủ đề xu hướng liên kết corpus qua `analysisRunId`; bao gồm `yearlyData`, `emergenceScore`, `papers[]`.
 
+### Keyword
+
+Keyword nghiên cứu đã chuẩn hóa; có `category` để phân biệt `domain`, `algorithm`, `application`, `method`, `dataset`, `tool`, `general`.
+
 ### User
 
 `bookmarks[]`, `trackedRuns[]`, `follows[]`, `lastLogin`, `interests[]`.
@@ -1081,6 +1121,8 @@ Collection WDP hợp nhất — chi tiết trường: [13-schema-hop-nhat.md](13
 | `422` | Lỗi validation AI (body không hợp lệ) |
 | `500` | Lỗi máy chủ hoặc API upstream |
 | `504` | OpenAlex / API ngoài vượt `EXTERNAL_API_TIMEOUT_MS` (production thường 90s) |
+| `429` | API ngoài bị rate limit |
+| `403` | API key bị từ chối hoặc chưa active |
 
 ---
 
@@ -1092,6 +1134,8 @@ Collection WDP hợp nhất — chi tiết trường: [13-schema-hop-nhat.md](13
 | OpenAlex | `OPENALEX_API_URL`, `OPENALEX_MAILTO` | Tìm kiếm trực tiếp + ingest corpus (mailto giảm rate-limit) |
 | Semantic Scholar | `SEMANTIC_SCHOLAR_API_KEY` | Tìm kiếm trực tiếp tùy chọn |
 | Crossref | `CROSSREF_MAILTO` | Tìm kiếm trực tiếp tùy chọn |
+| IEEE Xplore | `IEEE_API_URL`, `IEEE_API_KEY` | Tìm kiếm trực tiếp tùy chọn |
+| Exa | `EXA_API_URL`, `EXA_API_KEY` | Tìm kiếm trực tiếp tùy chọn |
 | AI Service | `AI_SERVICE_URL` | Embedding, gợi ý, tóm tắt |
 
 ---

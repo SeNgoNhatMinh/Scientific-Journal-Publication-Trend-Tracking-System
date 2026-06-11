@@ -35,6 +35,10 @@ const envConfig = {
   SEMANTIC_SCHOLAR_API_KEY: process.env.SEMANTIC_SCHOLAR_API_KEY || '',
   CROSSREF_API_URL: process.env.CROSSREF_API_URL || 'https://api.crossref.org',
   CROSSREF_MAILTO: process.env.CROSSREF_MAILTO || 'youremail@gmail.com',
+  IEEE_API_URL: process.env.IEEE_API_URL || 'https://ieeexploreapi.ieee.org',
+  IEEE_API_KEY: process.env.IEEE_API_KEY || '',
+  EXA_API_URL: process.env.EXA_API_URL || 'https://api.exa.ai',
+  EXA_API_KEY: process.env.EXA_API_KEY || '',
   AI_SERVICE_URL: sanitizeEnv(process.env.AI_SERVICE_URL) || 'http://localhost:8000',
 
   // CORS (nhiều origin cách nhau bởi dấu phẩy)

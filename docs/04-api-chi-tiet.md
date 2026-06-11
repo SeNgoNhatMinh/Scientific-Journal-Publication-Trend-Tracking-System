@@ -179,7 +179,7 @@ Base: `/api/v1/sources` — Gọi API ngoài, **không** lưu MongoDB.
 | Trường | Kiểu | Bắt buộc | Mặc định |
 |--------|------|----------|----------|
 | `keyword` | string | **Có** | — |
-| `source` | string | Không | `openalex` |
+| `source` | string | Không | `openalex`; hỗ trợ `openalex`, `semanticscholar`, `crossref`, `ieee`, `exa` |
 | `page` | number | Không | `1` |
 | `limit` | number | Không | `20` |
 | `year` | number | Không | — (lọc năm xuất bản) |
@@ -538,6 +538,56 @@ Giống `GET /sources/trend` + thêm phân loại xu hướng.
 
 ---
 
+### `GET /trends/keyword-categories`
+
+Trả keyword đã lưu theo loại phân tích: `domain`, `algorithm`, `application`, `method`, `dataset`, `tool`, `general`.
+
+**Query:** `category`, `analysisRunId`, `limit`
+
+**Response `200`**
+
+| Trường | Kiểu | Mô tả |
+|--------|------|--------|
+| `success` | boolean | |
+| `source` | string | `all_keywords` hoặc `corpus_run` |
+| `category` | string | Loại đang lọc hoặc `all` |
+| `keywords` | array | Keyword kèm `category`, `paperCount`, `growthRate`, `trendScore` |
+
+---
+
+### `GET /trends/keyword-graph`
+
+Trả graph đồng xuất hiện keyword để FE vẽ network/graph.
+
+**Query:** `analysisRunId`, `limit`, `paperLimit`, `year`, `source`
+
+**Response `200`**
+
+| Trường | Kiểu | Mô tả |
+|--------|------|--------|
+| `success` | boolean | |
+| `nodes` | array | `{ id, label, category, paperCount, growthRate, trendScore }` |
+| `edges` | array | `{ source, target, weight }` |
+| `meta` | object | Số paper/node/edge đã dùng |
+
+---
+
+### `GET /trends/algorithm-domains`
+
+Trả các cặp thuật toán-domain cùng xuất hiện trong paper đã lưu.
+
+**Query:** `analysisRunId`, `limit`, `paperLimit`, `year`, `source`
+
+**Response `200`**
+
+| Trường | Kiểu | Mô tả |
+|--------|------|--------|
+| `success` | boolean | |
+| `pairs` | array | `{ algorithm, domain, paperCount }` |
+| `meta` | object | Số paper và pair |
+
+---
+
 ### `GET /trends/topics/{topicId}`
 
 **Path:** `topicId` (ObjectId)
@@ -595,7 +645,21 @@ Base: `/api/v1/papers`
 
 ### `GET /papers/search`
 
-Giống hệt `GET /sources/search` (query và response `PaperLive`).
+Tìm trong các paper đã lưu ở MongoDB local.
+
+**Query**
+
+| Trường | Kiểu | Bắt buộc | Mô tả |
+|--------|------|----------|-------|
+| `keyword` | string | Có | Tìm trong `title`, `abstract` |
+| `page` | number | Không | Mặc định `1` |
+| `limit` | number | Không | Mặc định `20`, tối đa `100` |
+| `year` | number | Không | Lọc theo năm công bố |
+| `source` | string | Không | Lọc nguồn local: `openalex`, `semanticscholar`, `semantic_scholar`, `crossref`, `ieee`, `exa` |
+| `analysisRunId` | string | Không | Lọc paper theo corpus run |
+| `sortBy` | string | Không | `relevance`, `citations`, `newest`, `oldest` |
+
+**Ghi chú:** tìm kiếm live từ nguồn ngoài dùng `GET /sources/search`.
 
 ---
 
@@ -897,7 +961,7 @@ Dùng trong `papers[]` của search (Sources/Papers).
 | `authors` | array | `{ authorId, name }` |
 | `journalName` | string \| null | |
 | `url` | string \| null | |
-| `source` | string | `openalex` \| `semanticscholar` \| `crossref` |
+| `source` | string | `openalex` \| `semanticscholar` \| `crossref` \| `ieee` \| `exa` |
 
 ---
 
@@ -924,7 +988,24 @@ Dùng trong `papers[]` của search (Sources/Papers).
 
 ---
 
-### 9.3 AnalysisRun
+### 9.3 Keyword
+
+| Trường | Kiểu | Mô tả |
+|--------|------|--------|
+| `_id` | string | |
+| `name` | string | Keyword normalized |
+| `normalizedText` | string | Chuẩn hóa để deduplicate |
+| `category` | string | `domain`, `algorithm`, `application`, `method`, `dataset`, `tool`, `general` |
+| `classificationConfidence` | number | 0–1 |
+| `classifiedBy` | string | `rule`, `manual`, `ai`, `unknown` |
+| `lastClassifiedAt` | string | Lần phân loại gần nhất |
+| `paperCount` | number | Số paper local/corpus đã gắn keyword |
+| `citationCount` | number | Tổng citation nếu có |
+| `growthRate`, `trendScore` | number | Chỉ số trend nếu có |
+
+---
+
+### 9.4 AnalysisRun
 
 | Trường | Kiểu | Mô tả |
 |--------|------|--------|
@@ -948,7 +1029,7 @@ Dùng trong `papers[]` của search (Sources/Papers).
 
 ---
 
-### 9.4 Paper (trong MongoDB)
+### 9.5 Paper (trong MongoDB)
 
 | Trường | Kiểu | Mô tả |
 |--------|------|--------|

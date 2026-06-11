@@ -10,14 +10,14 @@ const router = express.Router();
  *     tags:
  *       - Sources
  *     security: []
- *     summary: Tìm bài báo từ OpenAlex, Semantic Scholar hoặc Crossref
+ *     summary: Tìm bài báo từ OpenAlex, Semantic Scholar, Crossref, IEEE hoặc Exa
  *     description: Call academic search APIs through the backend using a source selector
  *     parameters:
  *       - in: query
  *         name: source
  *         schema:
  *           type: string
- *           enum: [openalex, semanticscholar, crossref]
+ *           enum: [openalex, semanticscholar, crossref, ieee, exa]
  *           default: openalex
  *       - in: query
  *         name: keyword

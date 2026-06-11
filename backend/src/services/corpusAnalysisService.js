@@ -5,6 +5,69 @@ const PublicationTrend = require('../models/PublicationTrend');
 const authorKeywordService = require('./authorKeywordService');
 const notificationService = require('./notificationService');
 
+const summarizeKeywordCategories = async runId => {
+  const papers = await Paper.find({ analysisRunId: runId })
+    .select('keywordIds')
+    .populate('keywordIds', 'name normalizedText category');
+
+  const byCategory = new Map();
+  const categoryKeywords = {
+    algorithm: new Map(),
+    domain: new Map(),
+    application: new Map(),
+  };
+  const pairCounts = new Map();
+
+  for (const paper of papers) {
+    const keywords = (paper.keywordIds || []).filter(Boolean);
+    const algorithms = [];
+    const domains = [];
+
+    for (const keyword of keywords) {
+      const category = keyword.category || 'general';
+      byCategory.set(category, (byCategory.get(category) || 0) + 1);
+
+      if (categoryKeywords[category]) {
+        const key = String(keyword._id);
+        const current = categoryKeywords[category].get(key) || {
+          keywordId: keyword._id,
+          name: keyword.name || keyword.normalizedText,
+          paperCount: 0,
+        };
+        current.paperCount += 1;
+        categoryKeywords[category].set(key, current);
+      }
+
+      if (category === 'algorithm') algorithms.push(keyword.name || keyword.normalizedText);
+      if (category === 'domain') domains.push(keyword.name || keyword.normalizedText);
+    }
+
+    for (const algorithm of algorithms) {
+      for (const domain of domains) {
+        const pairKey = `${algorithm}::${domain}`;
+        const current = pairCounts.get(pairKey) || { algorithm, domain, paperCount: 0 };
+        current.paperCount += 1;
+        pairCounts.set(pairKey, current);
+      }
+    }
+  }
+
+  const topFromMap = map =>
+    Array.from(map.values())
+      .sort((a, b) => b.paperCount - a.paperCount || a.name.localeCompare(b.name))
+      .slice(0, 10);
+
+  return {
+    byCategory: Object.fromEntries(byCategory),
+    topAlgorithms: topFromMap(categoryKeywords.algorithm),
+    topDomains: topFromMap(categoryKeywords.domain),
+    topApplications: topFromMap(categoryKeywords.application),
+    algorithmDomainPairs: Array.from(pairCounts.values())
+      .sort((a, b) => b.paperCount - a.paperCount)
+      .slice(0, 20),
+  };
+};
+
 const attachGrowthRates = trends => {
   return trends.map((entry, index) => {
     if (index === 0) return { ...entry, growthRate: 0 };
@@ -100,6 +163,7 @@ const analyzeRun = async runId => {
   }
 
   const seedKeyword = await authorKeywordService.upsertKeyword(run.seedKeyword, run.source);
+  const keywordCategorySummary = await summarizeKeywordCategories(runId);
 
   const trendRows = [];
   for (let i = 0; i < yearlyData.length; i += 1) {
@@ -146,6 +210,7 @@ const analyzeRun = async runId => {
       isEmerging,
       topicId: topic._id,
       keywordId: seedKeyword._id,
+      keywordCategorySummary,
       completedAt: new Date(),
     },
     { new: true }

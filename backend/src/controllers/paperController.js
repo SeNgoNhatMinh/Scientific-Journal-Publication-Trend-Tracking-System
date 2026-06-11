@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Paper = require('../models/Paper');
 const User = require('../models/User');
-const academicApiService = require('../services/academicApiService');
 const authMiddleware = require('../middlewares/auth');
 
 /**
@@ -9,10 +8,32 @@ const authMiddleware = require('../middlewares/auth');
  * Handles paper search, filtering, and retrieval
  */
 
-// Search papers from OpenAlex
+const buildLocalSourceFilter = source => {
+  const value = String(source || '').toLowerCase().replace(/[_-]/g, '');
+
+  if (value === 'openalex') return ['openalex', 'OpenAlex'];
+  if (value === 'semanticscholar' || value === 'semantic') {
+    return ['semanticscholar', 'semantic_scholar', 'SemanticScholar'];
+  }
+  if (value === 'crossref') return ['crossref', 'Crossref'];
+  if (value === 'ieee' || value === 'ieeexplore') return ['ieee', 'IEEE'];
+  if (value === 'exa') return ['exa', 'Exa'];
+
+  return [source];
+};
+
+// Search papers saved in the local MongoDB database
 const searchPapers = async (req, res, next) => {
   try {
-    const { source = 'openalex', keyword, page = 1, limit = 20, year } = req.query;
+    const {
+      keyword,
+      page = 1,
+      limit = 20,
+      year,
+      source,
+      analysisRunId,
+      sortBy = 'relevance',
+    } = req.query;
 
     if (!keyword) {
       return res.status(400).json({
@@ -21,15 +42,70 @@ const searchPapers = async (req, res, next) => {
       });
     }
 
-    const result = await academicApiService.searchPapers(source, keyword, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      year: year ? parseInt(year) : null,
-    });
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter = {
+      $text: { $search: keyword.trim() },
+    };
+
+    if (year) {
+      filter.publicationYear = parseInt(year, 10);
+    }
+
+    if (source) {
+      filter.source = { $in: buildLocalSourceFilter(source) };
+    }
+
+    if (analysisRunId) {
+      if (!mongoose.Types.ObjectId.isValid(analysisRunId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid analysisRunId',
+        });
+      }
+      filter.analysisRunId = analysisRunId;
+    }
+
+    const sortOptions = {
+      relevance: { score: { $meta: 'textScore' }, citationCount: -1 },
+      citations: { citationCount: -1, publishedDate: -1 },
+      newest: { publishedDate: -1, publicationYear: -1 },
+      oldest: { publishedDate: 1, publicationYear: 1 },
+    };
+
+    const sort = sortOptions[sortBy] || sortOptions.relevance;
+
+    const [papers, total] = await Promise.all([
+      Paper.find(filter, { score: { $meta: 'textScore' } })
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum)
+        .populate('journal', 'title issn publisher')
+        .select(
+          'title abstract doi publishedDate publicationYear authors journal journalName citationCount openAccessUrl keywords source url pdfUrl analysisRunId createdAt'
+        ),
+      Paper.countDocuments(filter),
+    ]);
 
     res.status(200).json({
       success: true,
-      ...result,
+      source: 'local_database',
+      query: {
+        keyword,
+        year: year ? parseInt(year, 10) : null,
+        source: source || null,
+        analysisRunId: analysisRunId || null,
+        sortBy,
+      },
+      total,
+      papers,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum),
+      },
     });
   } catch (error) {
     next(error);
@@ -107,7 +183,7 @@ const savePaper = async (req, res, next) => {
     if (!paper.source) {
       return res.status(400).json({
         success: false,
-        message: 'paper.source is required (openalex, semantic_scholar, or crossref)',
+        message: 'paper.source is required (openalex, semantic_scholar, crossref, ieee, or exa)',
       });
     }
 
