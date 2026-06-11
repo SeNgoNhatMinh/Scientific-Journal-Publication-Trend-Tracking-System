@@ -19,6 +19,7 @@ const trendRoutes = require('./routes/trendRoutes');
 const sourceRoutes = require('./routes/sourceRoutes');
 const corpusRoutes = require('./routes/corpusRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const workspaceRoutes = require('./routes/workspaceRoutes');
 
 const app = express();
 
@@ -76,6 +77,7 @@ app.use(`${apiPrefix}/trends`, trendRoutes);
 app.use(`${apiPrefix}/sources`, sourceRoutes);
 app.use(`${apiPrefix}/corpus`, corpusRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
+app.use(`${apiPrefix}/workspaces`, workspaceRoutes);
 
 // 404 handler
 app.use((req, res) => {

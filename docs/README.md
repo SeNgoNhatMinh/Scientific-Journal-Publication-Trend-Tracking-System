@@ -9,7 +9,7 @@
 | 03 | [03-api-dac-ta.md](./03-api-dac-ta.md) | Đặc tả API (endpoint, luồng) |
 | 04 | [04-api-chi-tiet.md](./04-api-chi-tiet.md) | Chi tiết request/response từng API |
 | 05 | [05-huong-dan-fe.md](./05-huong-dan-fe.md) | Hướng dẫn FE, curl, smoke test production |
-| 12 | [12-luong-nghiep-vu.md](./12-luong-nghiep-vu.md) | **Use case & luồng nghiệp vụ** (diagram cho FE) |
+| 12 | [12-luong-nghiep-vu.md](./12-luong-nghiep-vu.md) | **Use case & luồng nghiệp vụ** — giải thích để báo cáo/thuyết trình + diagram cho FE |
 | 06 | [06-kien-truc.md](./06-kien-truc.md) | **Software Architecture Diagram** (C4, deploy, ER) |
 | 07 | [07-cau-truc-du-an.md](./07-cau-truc-du-an.md) | Cấu trúc thư mục (EN) |
 | 08 | [08-thuat-toan-paper.md](./08-thuat-toan-paper.md) | Thuật toán & paper tham khảo |
@@ -17,6 +17,7 @@
 | 10 | [10-phase1-cu.md](./10-phase1-cu.md) | Snapshot Phase 1 (cũ, tham khảo) |
 | 11 | [11-tom-tat-giao-hang.md](./11-tom-tat-giao-hang.md) | Tóm tắt giao hàng (EN) |
 | 13 | [13-schema-hop-nhat.md](./13-schema-hop-nhat.md) | **Schema DB hợp nhất FA + WDP** (11 collection) |
+| 15 | [15-research-workspace.md](./15-research-workspace.md) | **Research Workspace / Place** — định hướng tạo trend riêng cho cá nhân/nhóm, mobile alert và mô hình tính phí |
 
 ## Cấu hình mẫu
 

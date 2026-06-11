@@ -26,11 +26,12 @@
 7. [Corpus API (theo dõi lai)](#7-corpus-api-theo-dõi-lai)
 8. [Trends API](#8-trends-api)
 9. [Papers API](#9-papers-api)
-10. [AI Service API (proxy)](#10-ai-service-api-proxy)
-11. [AI Service API (trực tiếp)](#11-ai-service-api-trực-tiếp)
-12. [Mô hình dữ liệu (tóm tắt)](#12-mô-hình-dữ-liệu-tóm-tắt)
-13. [Xử lý lỗi](#13-xử-lý-lỗi)
-14. [Phụ thuộc bên ngoài](#14-phụ-thuộc-bên-ngoài)
+10. [Workspace API](#10-workspace-api)
+11. [AI Service API (proxy)](#11-ai-service-api-proxy)
+12. [AI Service API (trực tiếp)](#12-ai-service-api-trực-tiếp)
+13. [Mô hình dữ liệu (tóm tắt)](#13-mô-hình-dữ-liệu-tóm-tắt)
+14. [Xử lý lỗi](#14-xử-lý-lỗi)
+15. [Phụ thuộc bên ngoài](#15-phụ-thuộc-bên-ngoài)
 
 ---
 
@@ -42,6 +43,7 @@ Backend cung cấp ba lớp chức năng:
 |-----|--------|-------|
 | **Truy vấn trực tiếp** | `/sources`, `/trends/keyword` | Gọi thời gian thực tới OpenAlex, Semantic Scholar, Crossref, IEEE, Exa |
 | **Theo dõi corpus** | `/corpus` | Thu thập bài báo vào MongoDB, tính xu hướng theo năm, tạo bằng chứng `Topic` |
+| **Research Workspace** | `/workspaces` | Không gian nghiên cứu riêng cho cá nhân/nhóm, trend nội bộ, note, alert |
 | **AI** | `/ai` | Proxy tới Python FastAPI (embedding, gợi ý, tóm tắt) |
 
 **Luồng lai được khuyến nghị**
@@ -891,7 +893,207 @@ Lưu đối tượng paper vào MongoDB.
 
 ---
 
-## 10. AI Service API (proxy)
+## 10. Workspace API
+
+Base: `/api/v1/workspaces`
+
+Tất cả endpoint Workspace yêu cầu JWT.
+
+### `POST /workspaces`
+
+Tạo Research Workspace cá nhân hoặc nhóm.
+
+**Auth:** Bearer bắt buộc
+
+**Request body**
+
+```json
+{
+  "name": "AI in Medical Imaging",
+  "description": "Workspace theo dõi paper và trend AI y tế",
+  "visibility": "team",
+  "plan": "free"
+}
+```
+
+**Response `201`:** `workspace`
+
+---
+
+### `GET /workspaces`
+
+Danh sách workspace mà user hiện tại là owner/member.
+
+**Auth:** Bearer bắt buộc
+
+**Query:** `page`, `limit`
+
+**Response `200`:** `workspaces`, `total`, `page`, `limit`
+
+---
+
+### `GET /workspaces/{workspaceId}`
+
+Chi tiết workspace kèm role hiện tại và thống kê số member/paper/corpus/note.
+
+**Auth:** Bearer bắt buộc
+
+**Response `200`:** `workspace`, `role`, `stats`
+
+---
+
+### `POST /workspaces/{workspaceId}/members`
+
+Thêm hoặc cập nhật thành viên. Chỉ `owner` được gọi.
+
+**Auth:** Bearer bắt buộc
+
+**Request body**
+
+```json
+{
+  "email": "member@example.com",
+  "role": "editor"
+}
+```
+
+Có thể dùng `userId` thay cho `email`.
+
+---
+
+### `POST /workspaces/{workspaceId}/papers`
+
+Thêm paper vào workspace. Cần role `owner` hoặc `editor`.
+
+**Auth:** Bearer bắt buộc
+
+**Request body với paper đã có**
+
+```json
+{
+  "paperId": "...",
+  "tags": ["mamba", "medical imaging"],
+  "note": "Paper nền để đọc trước",
+  "source": "bookmark"
+}
+```
+
+**Request body với paper mới**
+
+```json
+{
+  "paper": {
+    "title": "Example paper",
+    "source": "openalex",
+    "publicationYear": 2026,
+    "keywords": ["mamba", "medical imaging"]
+  },
+  "tags": ["mamba"]
+}
+```
+
+---
+
+### `GET /workspaces/{workspaceId}/papers`
+
+Danh sách paper trong workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Query:** `page`, `limit`, `tag`
+
+---
+
+### `POST /workspaces/{workspaceId}/corpus/runs`
+
+Tạo corpus run trong workspace. API này tái sử dụng pipeline `/corpus/runs`, sau đó liên kết `AnalysisRun` vào workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Request body:** giống `POST /corpus/runs`
+
+**Response `202`:** `run`, `workspaceCorpus`
+
+---
+
+### `GET /workspaces/{workspaceId}/trends`
+
+Trend riêng của workspace, tính từ paper được thêm trực tiếp và paper thuộc corpus run trong workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Response `200`:** `paperCount`, `yearlyData`, `byCategory`, `topKeywords`, `topAlgorithms`, `topDomains`, `topApplications`
+
+---
+
+### `GET /workspaces/{workspaceId}/keyword-graph`
+
+Graph đồng xuất hiện keyword trong workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Query:** `limit`, `paperLimit`
+
+**Response `200`:** `nodes`, `edges`, `meta`
+
+---
+
+### `POST /workspaces/{workspaceId}/notes`
+
+Tạo note nghiên cứu trong workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Request body**
+
+```json
+{
+  "paperId": "...",
+  "title": "Ý tưởng hướng nghiên cứu",
+  "content": "Có thể so sánh Mamba với ViT trên medical segmentation.",
+  "tags": ["idea", "mamba"]
+}
+```
+
+---
+
+### `GET /workspaces/{workspaceId}/notes`
+
+Danh sách note trong workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Query:** `page`, `limit`
+
+---
+
+### `POST /workspaces/{workspaceId}/alerts`
+
+Tạo alert keyword/trend cho mobile hoặc dashboard.
+
+**Auth:** Bearer bắt buộc
+
+**Request body**
+
+```json
+{
+  "keyword": "mamba",
+  "type": "trendSpike",
+  "notifyEnabled": true
+}
+```
+
+---
+
+### `GET /workspaces/{workspaceId}/alerts`
+
+Danh sách alert của workspace.
+
+**Auth:** Bearer bắt buộc
+
+---
+
+## 11. AI Service API (proxy)
 
 Base: `/api/v1/ai`
 
@@ -1058,7 +1260,7 @@ Model: `all-MiniLM-L6-v2` (384 chiều).
 
 ---
 
-## 11. AI Service API (trực tiếp)
+## 12. AI Service API (trực tiếp)
 
 Khi gọi trực tiếp dịch vụ Python (cổng `8000`):
 
@@ -1078,7 +1280,7 @@ Request/response body giống hệt các route proxy ở trên.
 
 ---
 
-## 12. Mô hình dữ liệu (tóm tắt)
+## 13. Mô hình dữ liệu (tóm tắt)
 
 ### AnalysisRun
 
@@ -1110,7 +1312,7 @@ Collection WDP hợp nhất — chi tiết trường: [13-schema-hop-nhat.md](13
 
 ---
 
-## 13. Xử lý lỗi
+## 14. Xử lý lỗi
 
 | HTTP | Nguyên nhân thường gặp |
 |------|------------------------|
@@ -1126,7 +1328,7 @@ Collection WDP hợp nhất — chi tiết trường: [13-schema-hop-nhat.md](13
 
 ---
 
-## 14. Phụ thuộc bên ngoài
+## 15. Phụ thuộc bên ngoài
 
 | Dịch vụ | Biến môi trường | Mục đích |
 |---------|-----------------|----------|
