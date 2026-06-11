@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const swaggerUi = require('swagger-ui-express');
 const os = require('os');
+const path = require('path');
 
 const connectDB = require('./config/database');
 const envConfig = require('./config/env');
@@ -34,6 +35,7 @@ const corsOrigins = envConfig.CORS_ORIGIN.split(',').map(o => o.trim()).filter(B
 app.use(cors({ origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // OpenAPI JSON (cho FE codegen: openapi-typescript-codegen, orval, ...)
 app.get('/api-docs.json', (req, res) => {

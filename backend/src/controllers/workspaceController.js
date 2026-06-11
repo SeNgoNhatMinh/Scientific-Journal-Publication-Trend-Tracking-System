@@ -1,4 +1,5 @@
 const workspaceService = require('../services/workspaceService');
+const paperPdfService = require('../services/paperPdfService');
 
 const createWorkspace = async (req, res, next) => {
   try {
@@ -175,6 +176,31 @@ const getKeywordGraph = async (req, res, next) => {
   }
 };
 
+const uploadPaperPdf = async (req, res, next) => {
+  try {
+    const { workspaceId, paperId } = req.params;
+    await workspaceService.assertPaperInWorkspace(workspaceId, req.user.id, paperId, 'editor');
+    const result = await paperPdfService.uploadPaperPdf({
+      paperId,
+      userId: req.user.id,
+      file: req.file,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Workspace paper PDF uploaded successfully',
+      workspaceId,
+      paperId: result.paper._id,
+      pdfUrl: result.pdfUrl,
+      uploadedPdf: result.uploadedPdf,
+      fullTextExtracted: result.fullTextExtracted,
+      fullTextLength: result.fullTextLength,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createWorkspace,
   listWorkspaces,
@@ -189,4 +215,5 @@ module.exports = {
   listAlerts,
   getTrends,
   getKeywordGraph,
+  uploadPaperPdf,
 };

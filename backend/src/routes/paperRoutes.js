@@ -1,6 +1,7 @@
 const express = require('express');
 const paperController = require('../controllers/paperController');
 const authMiddleware = require('../middlewares/auth');
+const { uploadPdf } = require('../middlewares/pdfUpload');
 
 const router = express.Router();
 
@@ -87,6 +88,50 @@ router.get('/search', paperController.searchPapers);
  *         description: Unauthorized
  */
 router.get('/bookmarks', authMiddleware.protect, paperController.getUserBookmarks);
+
+/**
+ * @swagger
+ * /papers/{paperId}/pdf:
+ *   post:
+ *     tags:
+ *       - Papers
+ *     summary: Upload file PDF cho một bài báo
+ *     description: Uploads a research paper PDF, stores file metadata, updates pdfUrl, and tries to extract full text.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paperId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [pdf]
+ *             properties:
+ *               pdf:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: PDF uploaded
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Paper not found
+ */
+router.post(
+  '/:paperId/pdf',
+  authMiddleware.protect,
+  uploadPdf.single('pdf'),
+  paperController.uploadPaperPdf
+);
 
 /**
  * @swagger

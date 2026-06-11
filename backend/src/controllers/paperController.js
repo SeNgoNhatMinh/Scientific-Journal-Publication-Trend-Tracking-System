@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Paper = require('../models/Paper');
 const User = require('../models/User');
 const authMiddleware = require('../middlewares/auth');
+const paperPdfService = require('../services/paperPdfService');
 
 /**
  * Paper Search Controller
@@ -279,10 +280,43 @@ const getUserBookmarks = async (req, res, next) => {
   }
 };
 
+const uploadPaperPdf = async (req, res, next) => {
+  try {
+    const { paperId } = req.params;
+    const userId = req.user.id;
+
+    if (!mongoose.Types.ObjectId.isValid(paperId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid paper ID',
+      });
+    }
+
+    const result = await paperPdfService.uploadPaperPdf({
+      paperId,
+      userId,
+      file: req.file,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'PDF uploaded successfully',
+      paperId: result.paper._id,
+      pdfUrl: result.pdfUrl,
+      uploadedPdf: result.uploadedPdf,
+      fullTextExtracted: result.fullTextExtracted,
+      fullTextLength: result.fullTextLength,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   searchPapers,
   getPaperDetails,
   savePaper,
   bookmarkPaper,
   getUserBookmarks,
+  uploadPaperPdf,
 };

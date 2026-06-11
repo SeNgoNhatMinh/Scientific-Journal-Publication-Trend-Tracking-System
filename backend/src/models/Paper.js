@@ -95,6 +95,29 @@ const paperSchema = new mongoose.Schema(
     },
     url: String,
     pdfUrl: String,
+    uploadedPdf: {
+      originalName: String,
+      fileName: String,
+      mimeType: String,
+      size: Number,
+      path: String,
+      url: String,
+      uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      uploadedAt: Date,
+      textExtracted: {
+        type: Boolean,
+        default: false,
+      },
+      extractionError: String,
+    },
+    fullText: {
+      type: String,
+      maxlength: 200000,
+    },
 
     // Relevance & Ranking
     relevanceScore: {

@@ -41,6 +41,8 @@ coverage/
 # Temp files
 temp/
 tmp/
+uploads/
+backend/uploads/
 
 # Python
 __pycache__/

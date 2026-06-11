@@ -352,6 +352,26 @@ const getWorkspacePaperFilter = async workspaceId => {
   return { or, paperIds, analysisRunIds };
 };
 
+const assertPaperInWorkspace = async (workspaceId, userId, paperId, requiredRole = 'viewer') => {
+  await assertWorkspaceRole(workspaceId, userId, requiredRole);
+  ensureObjectId(paperId, 'paperId');
+
+  const directPaper = await WorkspacePaper.exists({ workspaceId, paperId });
+  if (directPaper) return true;
+
+  const workspaceCorpusRuns = await WorkspaceCorpus.find({ workspaceId }).select('analysisRunId');
+  const analysisRunIds = workspaceCorpusRuns.map(entry => entry.analysisRunId);
+  if (analysisRunIds.length) {
+    const corpusPaper = await Paper.exists({
+      _id: paperId,
+      analysisRunId: { $in: analysisRunIds },
+    });
+    if (corpusPaper) return true;
+  }
+
+  throw createError('Paper is not part of this workspace', 404);
+};
+
 const loadWorkspaceKeywordSets = async (workspaceId, paperLimit = 500) => {
   const { or } = await getWorkspacePaperFilter(workspaceId);
   if (!or.length) return [];
@@ -565,4 +585,5 @@ module.exports = {
   getTrends,
   getKeywordGraph,
   assertWorkspaceRole,
+  assertPaperInWorkspace,
 };

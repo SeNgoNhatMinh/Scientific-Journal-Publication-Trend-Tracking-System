@@ -1,6 +1,7 @@
 const express = require('express');
 const workspaceController = require('../controllers/workspaceController');
 const { protect } = require('../middlewares/auth');
+const { uploadPdf } = require('../middlewares/pdfUpload');
 
 const router = express.Router();
 
@@ -71,6 +72,21 @@ router.post('/:workspaceId/papers', workspaceController.addPaper);
  *       - bearerAuth: []
  */
 router.get('/:workspaceId/papers', workspaceController.listPapers);
+
+/**
+ * @swagger
+ * /workspaces/{workspaceId}/papers/{paperId}/pdf:
+ *   post:
+ *     tags: [Workspaces]
+ *     summary: Upload PDF cho paper trong workspace
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post(
+  '/:workspaceId/papers/:paperId/pdf',
+  uploadPdf.single('pdf'),
+  workspaceController.uploadPaperPdf
+);
 
 /**
  * @swagger

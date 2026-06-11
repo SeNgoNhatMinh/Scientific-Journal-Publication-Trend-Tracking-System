@@ -96,6 +96,7 @@ Backend v1 đã triển khai lớp Workspace quanh các model có sẵn: `User`,
 | `POST /workspaces/{id}/members` | Mời/thêm thành viên |
 | `POST /workspaces/{id}/papers` | Thêm paper vào workspace |
 | `GET /workspaces/{id}/papers` | Xem paper trong workspace |
+| `POST /workspaces/{id}/papers/{paperId}/pdf` | Upload PDF cho paper trong workspace |
 | `POST /workspaces/{id}/corpus/runs` | Tạo corpus run trong workspace |
 | `GET /workspaces/{id}/trends` | Trend riêng của workspace |
 | `GET /workspaces/{id}/keyword-graph` | Graph keyword trong workspace |

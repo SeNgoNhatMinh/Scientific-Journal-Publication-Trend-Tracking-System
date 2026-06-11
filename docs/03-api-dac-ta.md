@@ -883,6 +883,37 @@ Lưu đối tượng paper vào MongoDB.
 
 ---
 
+### `POST /papers/{paperId}/pdf`
+
+Upload file PDF cho bài báo đã lưu trong MongoDB. Backend lưu file, cập nhật `paper.pdfUrl`, lưu metadata vào `paper.uploadedPdf`, và cố gắng extract text vào `paper.fullText`.
+
+**Auth:** Bearer bắt buộc
+
+**Content-Type:** `multipart/form-data`
+
+**Form data**
+
+| Field | Kiểu | Bắt buộc | Mô tả |
+|-------|------|----------|-------|
+| `pdf` | file | Có | File PDF, tối đa 25MB |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "message": "PDF uploaded successfully",
+  "paperId": "...",
+  "pdfUrl": "/uploads/pdfs/1710000000000-paper.pdf",
+  "fullTextExtracted": true,
+  "fullTextLength": 12000
+}
+```
+
+**Lưu ý production:** file hiện được lưu trong filesystem của service backend. Trên Railway, filesystem container có thể không bền vững sau redeploy; bản production thật nên chuyển sang S3/R2/Cloudinary hoặc Railway Volume.
+
+---
+
 ### `GET /papers/bookmarks`
 
 **Auth:** Bearer bắt buộc
@@ -991,6 +1022,20 @@ Thêm paper vào workspace. Cần role `owner` hoặc `editor`.
   "tags": ["mamba"]
 }
 ```
+
+---
+
+### `POST /workspaces/{workspaceId}/papers/{paperId}/pdf`
+
+Upload PDF cho một paper trong workspace. Cần role `owner` hoặc `editor`; paper phải đã thuộc workspace trực tiếp hoặc thuộc corpus run của workspace.
+
+**Auth:** Bearer bắt buộc
+
+**Content-Type:** `multipart/form-data`
+
+**Form data:** `pdf` file PDF, tối đa 25MB.
+
+**Response `200`:** giống `POST /papers/{paperId}/pdf`, có thêm `workspaceId`.
 
 ---
 
