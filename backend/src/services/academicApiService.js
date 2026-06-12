@@ -91,13 +91,170 @@ const toProviderError = (source, error) => {
   throw providerError;
 };
 
+const cleanDoi = doi => {
+  const value = String(doi || '').trim();
+  if (!value) return null;
+  return (
+    value
+      .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+      .replace(/[?#].*$/, '')
+      .replace(/\/(table|figure|fig|supplement|ref|references)-?\d+$/i, '')
+      .trim() || null
+  );
+};
+
+const doiUrl = doi => {
+  const cleaned = cleanDoi(doi);
+  return cleaned ? `https://doi.org/${cleaned}` : null;
+};
+
+const firstUrl = (...values) =>
+  values.find(value => typeof value === 'string' && /^https?:\/\//i.test(value.trim())) || null;
+
+const extractDoiFromText = (...values) => {
+  const text = values
+    .flat()
+    .filter(Boolean)
+    .join(' ');
+  const match = text.match(/\b10\.\d{4,9}\/[-._;()/:A-Z0-9]+\b/i);
+  return cleanDoi(match?.[0]);
+};
+
+const openAlexInvertedIndexToText = invertedIndex => {
+  if (!invertedIndex || typeof invertedIndex !== 'object' || Array.isArray(invertedIndex)) {
+    return null;
+  }
+
+  const words = [];
+  Object.entries(invertedIndex).forEach(([word, positions]) => {
+    if (!Array.isArray(positions)) return;
+    positions.forEach(position => {
+      if (Number.isInteger(position)) words[position] = word;
+    });
+  });
+
+  return words.filter(Boolean).join(' ') || null;
+};
+
+const normalizeAbstractText = abstract => {
+  if (typeof abstract === 'string') return abstract;
+  return openAlexInvertedIndexToText(abstract);
+};
+
+const normalizeTitleForCompare = title =>
+  String(title || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const titleSimilarity = (a, b) => {
+  const aWords = new Set(normalizeTitleForCompare(a).split(' ').filter(word => word.length > 2));
+  const bWords = new Set(normalizeTitleForCompare(b).split(' ').filter(word => word.length > 2));
+  if (!aWords.size || !bWords.size) return 0;
+  const intersection = Array.from(aWords).filter(word => bWords.has(word)).length;
+  return intersection / Math.max(aWords.size, bWords.size);
+};
+
+const formatCrossrefAuthors = authors =>
+  (authors || [])
+    .map(author => ({
+      authorId: author.ORCID || null,
+      name: [author.given, author.family].filter(Boolean).join(' ') || author.name || null,
+    }))
+    .filter(author => author.name);
+
+const crossrefDatePartsToDate = item =>
+  item.published?.['date-parts']?.[0]?.join('-') ||
+  item.issued?.['date-parts']?.[0]?.join('-') ||
+  item['published-print']?.['date-parts']?.[0]?.join('-') ||
+  item['published-online']?.['date-parts']?.[0]?.join('-') ||
+  null;
+
+const crossrefDatePartsToYear = item =>
+  item.published?.['date-parts']?.[0]?.[0] ||
+  item.issued?.['date-parts']?.[0]?.[0] ||
+  item['published-print']?.['date-parts']?.[0]?.[0] ||
+  item['published-online']?.['date-parts']?.[0]?.[0] ||
+  null;
+
+const extractArxivYear = url => {
+  const match = String(url || '').match(/arxiv\.org\/(?:abs|html|pdf)\/(\d{2})(\d{2})\./i);
+  if (!match) return null;
+  const year = parseInt(match[1], 10);
+  return year >= 91 ? 1900 + year : 2000 + year;
+};
+
+const enrichExaPaperWithCrossref = async paper => {
+  if (!paper.title) return paper;
+
+  try {
+    const response = await crossrefClient.get('/works', {
+      params: {
+        query: paper.title,
+        rows: 1,
+        mailto: envConfig.CROSSREF_MAILTO,
+      },
+    });
+
+    const item = response.data.message?.items?.[0];
+    if (!item) return paper;
+
+    const crossrefTitle = Array.isArray(item.title) ? item.title[0] : item.title;
+    if (titleSimilarity(paper.title, crossrefTitle) < 0.45) return paper;
+
+    const doi = cleanDoi(item.DOI || item.doi);
+    return {
+      ...paper,
+      doi: doi || paper.doi,
+      url: firstUrl(paper.url, item.URL, doiUrl(doi)) || paper.url,
+      authors: paper.authors?.length ? paper.authors : formatCrossrefAuthors(item.author),
+      journalName: paper.journalName || item['container-title']?.[0] || item.publisher || null,
+      citationCount: paper.citationCount || item['is-referenced-by-count'] || 0,
+      publicationYear: crossrefDatePartsToYear(item) || paper.publicationYear || null,
+      publishedDate: crossrefDatePartsToDate(item) || paper.publishedDate || null,
+    };
+  } catch {
+    return paper;
+  }
+};
+
+const isResearchLikeExaResult = paper => {
+  const url = String(paper.url || '').toLowerCase();
+  const title = String(paper.title || '').trim();
+  const text = String(paper.text || paper.summary || '').toLowerCase();
+  if (!title || !url) return false;
+
+  const researchSignals = [
+    'arxiv.org',
+    'doi.org',
+    'semanticscholar.org',
+    'openalex.org',
+    'springer.com',
+    'sciencedirect.com',
+    'ieee.org',
+    'acm.org',
+    'mdpi.com',
+    'nature.com',
+    'frontiersin.org',
+    'researchgate.net',
+    'pubmed.ncbi.nlm.nih.gov',
+  ];
+
+  return (
+    researchSignals.some(signal => url.includes(signal)) ||
+    /\b(abstract|paper|study|research|journal|conference|proceedings|arxiv|doi)\b/i.test(`${title} ${text}`)
+  );
+};
+
 const normalizePaper = (source, paper) => {
   if (source === 'openalex') {
+    const doi = cleanDoi(paper.doi);
     return {
       id: paper.id,
       title: paper.title,
-      abstract: paper.abstract || paper.abstract_inverted_index || null,
-      doi: paper.doi?.replace('https://doi.org/', ''),
+      abstract: normalizeAbstractText(paper.abstract) || normalizeAbstractText(paper.abstract_inverted_index),
+      doi,
       publishedDate: paper.publication_date,
       publicationYear: paper.publication_year,
       citationCount: paper.cited_by_count || 0,
@@ -106,17 +263,18 @@ const normalizePaper = (source, paper) => {
         name: author.author?.display_name,
       })),
       journalName: paper.primary_location?.source?.display_name,
-      url: paper.doi || paper.primary_location?.landing_page_url || paper.id,
+      url: firstUrl(paper.primary_location?.landing_page_url, paper.open_access?.oa_url, doiUrl(doi), paper.id),
       source: 'openalex',
     };
   }
 
   if (source === 'semanticscholar') {
+    const doi = cleanDoi(paper.externalIds?.DOI);
     return {
       id: paper.paperId,
       title: paper.title,
       abstract: paper.abstract || null,
-      doi: paper.externalIds?.DOI,
+      doi,
       publishedDate: paper.year ? `${paper.year}-01-01` : null,
       publicationYear: paper.year || null,
       citationCount: paper.citationCount || 0,
@@ -125,7 +283,7 @@ const normalizePaper = (source, paper) => {
         name: author.name,
       })),
       journalName: paper.venue || null,
-      url: paper.url || null,
+      url: firstUrl(paper.url, doiUrl(doi)),
       source: 'semanticscholar',
     };
   }
@@ -137,11 +295,12 @@ const normalizePaper = (source, paper) => {
         ? parseInt(String(paper.publication_date).slice(0, 4), 10)
         : null;
 
+    const doi = cleanDoi(paper.doi);
     return {
       id: paper.article_number || paper.doi || paper.pdf_url || paper.html_url,
       title: paper.title,
       abstract: paper.abstract || null,
-      doi: paper.doi || null,
+      doi,
       publishedDate: paper.publication_date || null,
       publicationYear: Number.isNaN(publicationYear) ? null : publicationYear,
       citationCount: paper.citing_paper_count || paper.citing_patent_count || 0,
@@ -150,26 +309,31 @@ const normalizePaper = (source, paper) => {
         name: author.full_name || author.name,
       })),
       journalName: paper.publication_title || paper.publisher || null,
-      url: paper.html_url || paper.pdf_url || paper.doi ? (paper.html_url || paper.pdf_url || `https://doi.org/${paper.doi}`) : null,
+      url: firstUrl(paper.html_url, paper.pdf_url, doiUrl(doi)),
       source: 'ieee',
     };
   }
 
   if (source === 'exa') {
     const publishedDate = paper.publishedDate || paper.published_date || null;
-    const publicationYear = publishedDate ? parseInt(String(publishedDate).slice(0, 4), 10) : null;
+    const text = paper.text || paper.summary || paper.highlights?.join(' ') || '';
+    const publicationYear =
+      (publishedDate ? parseInt(String(publishedDate).slice(0, 4), 10) : null) ||
+      extractArxivYear(paper.url);
+    const doi = cleanDoi(paper.doi || paper.DOI) || extractDoiFromText(paper.url, text, paper.title);
+    const authorName = paper.author || paper.authors?.[0]?.name || paper.authors?.[0];
 
     return {
       id: paper.id || paper.url,
       title: paper.title,
-      abstract: paper.text || paper.summary || paper.highlights?.join(' ') || null,
-      doi: null,
+      abstract: text || null,
+      doi,
       publishedDate,
       publicationYear: Number.isNaN(publicationYear) ? null : publicationYear,
       citationCount: 0,
-      authors: paper.author ? [{ authorId: null, name: paper.author }] : [],
-      journalName: null,
-      url: paper.url,
+      authors: authorName ? [{ authorId: null, name: authorName }] : [],
+      journalName: paper.journal || paper.source || null,
+      url: firstUrl(paper.url, doiUrl(doi)),
       source: 'exa',
     };
   }
@@ -178,7 +342,7 @@ const normalizePaper = (source, paper) => {
     id: paper.DOI || paper.doi || paper.URL,
     title: Array.isArray(paper.title) ? paper.title[0] : paper.title,
     abstract: paper.abstract || null,
-    doi: paper.DOI || paper.doi || null,
+    doi: cleanDoi(paper.DOI || paper.doi),
     publishedDate:
       paper.published?.['date-parts']?.[0]?.join('-') ||
       paper['published-print']?.['date-parts']?.[0]?.join('-') ||
@@ -195,7 +359,7 @@ const normalizePaper = (source, paper) => {
       name: [author.given, author.family].filter(Boolean).join(' '),
     })),
     journalName: paper['container-title']?.[0] || null,
-    url: paper.URL || null,
+    url: firstUrl(paper.URL, doiUrl(paper.DOI || paper.doi)),
     source: 'crossref',
   };
 };
@@ -315,10 +479,15 @@ const searchPapers = async (source, keyword, options = {}) => {
     }
 
     const results = response.data.results || [];
+    const normalizedPapers = results
+      .filter(isResearchLikeExaResult)
+      .map(paper => normalizePaper('exa', paper));
+    const papers = await Promise.all(normalizedPapers.map(enrichExaPaperWithCrossref));
+
     return {
       source: normalizedSource,
-      total: results.length,
-      papers: results.map(paper => normalizePaper('exa', paper)),
+      total: papers.length,
+      papers,
     };
   }
 
