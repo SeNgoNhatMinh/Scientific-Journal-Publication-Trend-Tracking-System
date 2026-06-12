@@ -43,6 +43,39 @@ api.interceptors.request.use((config) => {
 });
 ```
 
+### UI stack đề xuất
+
+| Nhóm | Công nghệ |
+|------|-----------|
+| Core | React + Vite |
+| Styling | Tailwind CSS |
+| Component system | shadcn/ui |
+| UI motion | framer-motion |
+| Chart | Recharts |
+| 3D / interactive graph | three, @react-three/fiber, @react-three/drei, react-force-graph |
+
+### 3D Motion & Interactive Visual Layer
+
+FE dùng 3D có kiểm soát để tăng cảm giác “research intelligence”, nhưng không làm rối dashboard.
+
+**Vị trí dùng 3D**
+
+| Màn hình | 3D/animation nên dùng | Dữ liệu |
+|----------|-----------------------|---------|
+| `/` Landing | Nền keyword constellation / research network, node là keyword và edge là quan hệ chủ đề | `GET /trends/trending`, fallback mock nhẹ nếu chưa có dữ liệu |
+| `/insights` | Keyword graph có chế độ 2D/3D, node màu theo category | `GET /trends/keyword-graph` |
+| `/workspaces/:id` | Mini research map thể hiện paper, keyword, note trong workspace | `GET /workspaces/{id}/trends`, `GET /workspaces/{id}/keyword-graph` |
+| `/corpus/:id` | Animation pipeline nhẹ cho `pending -> ingesting -> analyzing -> completed` | `GET /corpus/runs/{id}` |
+
+**Nguyên tắc UX**
+
+- Không dùng 3D cho form login/register, bảng paper, bookmark, note editor.
+- Dashboard dữ liệu vẫn ưu tiên đọc nhanh, so sánh dễ, không để 3D che nội dung chính.
+- Mobile fallback sang 2D hoặc giảm hiệu ứng.
+- Tôn trọng `prefers-reduced-motion`.
+- Lazy load component 3D để không làm chậm trang chính.
+- Canvas 3D cần kích thước ổn định, không làm layout nhảy khi loading.
+
 ### Codegen (tùy chọn)
 
 ```bash
@@ -54,7 +87,7 @@ npx openapi-typescript-codegen \
 
 ---
 
-## 2. Bảng endpoint (37)
+## 2. Bảng endpoint
 
 Prefix: `/api/v1` trừ `/health` và `/api-docs`.
 
@@ -74,32 +107,47 @@ Prefix: `/api/v1` trừ `/health` và `/api-docs`.
 | 12 | GET | `/papers/{paperId}` | Không | — | Cần ObjectId Mongo hợp lệ |
 | 13 | POST | `/papers` | JWT | PASS | Body bắt buộc `paper.source` |
 | 14 | POST | `/papers/{paperId}/bookmark` | JWT | — | |
-| 15 | POST | `/corpus/runs` | Không | PASS | 202, poll status |
-| 16 | GET | `/corpus/runs` | Không | PASS | |
-| 17 | GET | `/corpus/runs/{runId}` | Không | PASS | |
-| 18 | GET | `/corpus/runs/{runId}/papers` | Không | PASS | |
-| 19 | POST | `/corpus/runs/{runId}/follow` | JWT | PASS | |
-| 20 | GET | `/corpus/me/tracked` | JWT | PASS | |
-| 21 | GET | `/notifications` | JWT | — | Query: `page`, `limit`, `unreadOnly` |
-| 22 | GET | `/notifications/unread-count` | JWT | — | Badge số chưa đọc |
-| 23 | PATCH | `/notifications/{id}/read` | JWT | — | |
-| 24 | PATCH | `/notifications/read-all` | JWT | — | |
-| 25 | GET | `/trends/keyword` | Không | PASS | Live trend |
-| 26 | POST | `/trends/compare` | Không | PASS | Body: `keywords[]` |
-| 27 | GET | `/trends/emerging` | Không | PASS | Có thể `topics: []` nếu chưa corpus |
-| 28 | GET | `/trends/trending` | Không | PASS | |
-| 29 | GET | `/trends/keyword-categories` | Không | PASS | Keyword theo `domain/algorithm/application/...` |
-| 30 | GET | `/trends/keyword-graph` | Không | PASS | Nodes/edges cho graph |
-| 31 | GET | `/trends/algorithm-domains` | Không | PASS | Cặp thuật toán-domain |
-| 32 | GET | `/trends/topics/{topicId}` | Không | — | |
-| 33 | GET | `/ai/health` | Không | PASS | Proxy AI |
-| 31 | POST | `/ai/embeddings/embed` | Không | PASS | Body: `{ text }` |
-| 32 | POST | `/ai/embeddings/embed-batch` | Không | PASS | `{ texts: [] }` |
-| 33 | POST | `/ai/embeddings/similarity` | Không | PASS | `{ text1, text2 }` |
-| 34 | POST | `/ai/recommendations/papers` | Không | PASS | |
-| 35 | POST | `/ai/recommendations/research-directions` | Không | PASS | `{ keywords: [] }` |
-| 36 | POST | `/ai/summarization/abstract` | Không | PASS | |
-| 37 | POST | `/ai/summarization/extract-problem` | Không | PASS | |
+| 15 | POST | `/papers/{paperId}/pdf` | JWT | — | Upload PDF field `pdf`, multipart |
+| 16 | POST | `/corpus/runs` | Không | PASS | 202, poll status |
+| 17 | GET | `/corpus/runs` | Không | PASS | |
+| 18 | GET | `/corpus/runs/{runId}` | Không | PASS | |
+| 19 | GET | `/corpus/runs/{runId}/papers` | Không | PASS | |
+| 20 | POST | `/corpus/runs/{runId}/follow` | JWT | PASS | |
+| 21 | GET | `/corpus/me/tracked` | JWT | PASS | |
+| 22 | GET | `/notifications` | JWT | — | Query: `page`, `limit`, `unreadOnly` |
+| 23 | GET | `/notifications/unread-count` | JWT | — | Badge số chưa đọc |
+| 24 | PATCH | `/notifications/{id}/read` | JWT | — | |
+| 25 | PATCH | `/notifications/read-all` | JWT | — | |
+| 26 | GET | `/trends/keyword` | Không | PASS | Live trend |
+| 27 | POST | `/trends/compare` | Không | PASS | Body: `keywords[]` |
+| 28 | GET | `/trends/emerging` | Không | PASS | Có thể `topics: []` nếu chưa corpus |
+| 29 | GET | `/trends/trending` | Không | PASS | |
+| 30 | GET | `/trends/keyword-categories` | Không | PASS | Keyword theo `domain/algorithm/application/...` |
+| 31 | GET | `/trends/keyword-graph` | Không | PASS | Nodes/edges cho graph |
+| 32 | GET | `/trends/algorithm-domains` | Không | PASS | Cặp thuật toán-domain |
+| 33 | GET | `/trends/topics/{topicId}` | Không | — | |
+| 34 | POST | `/workspaces` | JWT | — | Tạo Research Workspace |
+| 35 | GET | `/workspaces` | JWT | — | Danh sách workspace của user |
+| 36 | GET | `/workspaces/{workspaceId}` | JWT | — | Chi tiết + stats |
+| 37 | POST | `/workspaces/{workspaceId}/members` | JWT | — | Owner thêm member |
+| 38 | POST | `/workspaces/{workspaceId}/papers` | JWT | — | Thêm paper vào workspace |
+| 39 | GET | `/workspaces/{workspaceId}/papers` | JWT | — | Paper trong workspace |
+| 40 | POST | `/workspaces/{workspaceId}/papers/{paperId}/pdf` | JWT | — | Upload PDF trong workspace |
+| 41 | POST | `/workspaces/{workspaceId}/corpus/runs` | JWT | — | Corpus trong workspace |
+| 42 | GET | `/workspaces/{workspaceId}/trends` | JWT | — | Workspace trend |
+| 43 | GET | `/workspaces/{workspaceId}/keyword-graph` | JWT | — | Graph riêng |
+| 44 | POST | `/workspaces/{workspaceId}/notes` | JWT | — | Thêm note |
+| 45 | GET | `/workspaces/{workspaceId}/notes` | JWT | — | Danh sách note |
+| 46 | POST | `/workspaces/{workspaceId}/alerts` | JWT | — | Tạo alert |
+| 47 | GET | `/workspaces/{workspaceId}/alerts` | JWT | — | Danh sách alert |
+| 48 | GET | `/ai/health` | Không | PASS | Proxy AI |
+| 49 | POST | `/ai/embeddings/embed` | Không | PASS | Body: `{ text }` |
+| 50 | POST | `/ai/embeddings/embed-batch` | Không | PASS | `{ texts: [] }` |
+| 51 | POST | `/ai/embeddings/similarity` | Không | PASS | `{ text1, text2 }` |
+| 52 | POST | `/ai/recommendations/papers` | Không | PASS | |
+| 53 | POST | `/ai/recommendations/research-directions` | Không | PASS | `{ keywords: [] }` |
+| 54 | POST | `/ai/summarization/abstract` | Không | PASS | |
+| 55 | POST | `/ai/summarization/extract-problem` | Không | PASS | |
 
 Chi tiết trường: [04-api-chi-tiet.md](04-api-chi-tiet.md).
 

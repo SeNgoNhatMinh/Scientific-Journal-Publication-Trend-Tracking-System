@@ -9,6 +9,7 @@ const User = require('../models/User');
 const Paper = require('../models/Paper');
 const Keyword = require('../models/Keyword');
 const corpusService = require('./corpusService');
+const authorKeywordService = require('./authorKeywordService');
 
 const roleRank = {
   viewer: 1,
@@ -29,6 +30,45 @@ const normalizeTags = tags =>
   Array.isArray(tags)
     ? Array.from(new Set(tags.map(tag => normalizeText(tag)).filter(Boolean))).slice(0, 20)
     : [];
+
+const KEYWORD_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'based', 'be', 'by', 'can', 'for', 'from',
+  'has', 'have', 'in', 'into', 'is', 'it', 'its', 'model', 'models', 'of', 'on',
+  'or', 'our', 'paper', 'popular', 'research', 'study', 'system', 'systems',
+  'that', 'the', 'their', 'this', 'to', 'using', 'via', 'we', 'with',
+]);
+
+const extractKeywordsFromPaper = paperInput => {
+  const explicitKeywords = Array.isArray(paperInput.keywords)
+    ? paperInput.keywords.map(keyword => normalizeText(keyword)).filter(Boolean)
+    : [];
+
+  const text = normalizeText(`${paperInput.title || ''} ${paperInput.abstract || ''}`)
+    .replace(/[^a-z0-9\s-]/g, ' ');
+  const words = text
+    .split(/\s+/)
+    .map(word => word.trim())
+    .filter(word => word.length >= 3 && !KEYWORD_STOPWORDS.has(word));
+
+  const candidates = [...explicitKeywords];
+  for (let i = 0; i < words.length; i += 1) {
+    candidates.push(words[i]);
+    if (words[i + 1]) candidates.push(`${words[i]} ${words[i + 1]}`);
+    if (words[i + 1] && words[i + 2]) candidates.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+  }
+
+  const counts = new Map();
+  for (const candidate of candidates) {
+    const normalized = normalizeText(candidate);
+    if (!normalized || normalized.length < 3 || KEYWORD_STOPWORDS.has(normalized)) continue;
+    counts.set(normalized, (counts.get(normalized) || 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || b[0].split(' ').length - a[0].split(' ').length)
+    .map(([keyword]) => keyword)
+    .slice(0, 12);
+};
 
 const createError = (message, statusCode = 400) => {
   const err = new Error(message);
@@ -196,7 +236,14 @@ const findOrCreatePaper = async paperInput => {
   const existing = or.length ? await Paper.findOne({ $or: or }) : null;
   if (existing) return existing;
 
-  return Paper.create(paperInput);
+  const keywords = extractKeywordsFromPaper(paperInput);
+  const keywordIds = await authorKeywordService.linkPaperKeywords(keywords);
+
+  return Paper.create({
+    ...paperInput,
+    keywords,
+    keywordIds,
+  });
 };
 
 const addPaper = async (workspaceId, userId, { paperId, paper, tags, note, source = 'manual' }) => {

@@ -15,16 +15,25 @@ const upsertKeyword = async (text, source = 'openalex') => {
   const classification = keywordClassificationService.classifyKeyword(normalizedText);
   let keyword = await Keyword.findOne({ normalizedText });
   if (!keyword) {
-    keyword = await Keyword.create({
-      name: normalizedText,
-      normalizedText,
-      source,
-      category: classification.category,
-      classificationConfidence: classification.confidence,
-      classifiedBy: classification.classifiedBy,
-      lastClassifiedAt: new Date(),
-      lastUpdatedAt: new Date(),
-    });
+    try {
+      keyword = await Keyword.create({
+        name: normalizedText,
+        normalizedText,
+        source,
+        category: classification.category,
+        classificationConfidence: classification.confidence,
+        classifiedBy: classification.classifiedBy,
+        lastClassifiedAt: new Date(),
+        lastUpdatedAt: new Date(),
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        // Race condition: another process created this keyword concurrently
+        keyword = await Keyword.findOne({ normalizedText });
+      } else {
+        throw err;
+      }
+    }
   } else if (
     keyword.classifiedBy === 'unknown' ||
     !keyword.lastClassifiedAt ||
@@ -35,7 +44,16 @@ const upsertKeyword = async (text, source = 'openalex') => {
     keyword.classifiedBy = classification.classifiedBy;
     keyword.lastClassifiedAt = new Date();
     keyword.lastUpdatedAt = new Date();
-    await keyword.save();
+    try {
+      await keyword.save();
+    } catch (err) {
+      if (err.code === 11000) {
+        // Race condition: another process updated or set unique constraints
+        keyword = await Keyword.findOne({ normalizedText });
+      } else {
+        throw err;
+      }
+    }
   }
   return keyword;
 };
