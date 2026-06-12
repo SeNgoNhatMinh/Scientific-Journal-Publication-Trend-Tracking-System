@@ -64,17 +64,13 @@ const seedApiSources = async () => {
 const repairLegacyKeywordIndexes = async () => {
   try {
     const indexes = await Keyword.collection.indexes();
-    const legacyOpenAlexIndex = indexes.find(
-      index =>
-        index.name === 'openalexId_1' &&
-        index.unique === true &&
-        !index.partialFilterExpression &&
-        !index.sparse
-    );
+    const openAlexIndex = indexes.find(index => index.name === 'openalexId_1');
+    const hasExpectedPartialFilter =
+      openAlexIndex?.partialFilterExpression?.openalexId?.$type === 'string';
 
-    if (legacyOpenAlexIndex) {
+    if (openAlexIndex && (!openAlexIndex.unique || !hasExpectedPartialFilter)) {
       await Keyword.collection.dropIndex('openalexId_1');
-      console.log('Dropped legacy Keyword.openalexId unique index');
+      console.log('Dropped legacy Keyword.openalexId index');
     }
 
     await Keyword.collection.createIndex(

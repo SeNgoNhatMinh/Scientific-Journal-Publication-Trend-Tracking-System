@@ -20,7 +20,14 @@ const keywordSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
     },
-    openalexId: { type: String, default: null },
+    openalexId: {
+      type: String,
+      default: undefined,
+      set: value => {
+        const normalized = String(value || '').trim();
+        return normalized || undefined;
+      },
+    },
     worksCount: { type: Number, default: null },
     description: String,
     
@@ -117,6 +124,9 @@ keywordSchema.index(
 keywordSchema.pre('validate', function (next) {
   if (!this.normalizedText && this.name) {
     this.normalizedText = String(this.name).trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+  if (this.openalexId === null || this.openalexId === '') {
+    this.openalexId = undefined;
   }
   next();
 });
