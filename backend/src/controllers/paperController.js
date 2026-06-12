@@ -198,6 +198,31 @@ const savePaper = async (req, res, next) => {
     });
   } catch (error) {
     if (error.code === 11000) {
+      try {
+        const query = {};
+        if (paper?.externalIds?.openalex) {
+          query['externalIds.openalex'] = paper.externalIds.openalex;
+        } else if (paper?.externalIds?.semanticScholar) {
+          query['externalIds.semanticScholar'] = paper.externalIds.semanticScholar;
+        } else if (paper?.doi) {
+          query.doi = paper.doi;
+        } else if (paper?.title) {
+          query.title = paper.title;
+        }
+
+        const existingPaper = Object.keys(query).length > 0
+          ? await Paper.findOne(query)
+          : null;
+
+        return res.status(409).json({
+          success: false,
+          message: 'Paper already exists in database',
+          paper: existingPaper || undefined,
+        });
+      } catch (findErr) {
+        console.error('Failed to find existing paper on duplicate error:', findErr);
+      }
+
       return res.status(409).json({
         success: false,
         message: 'Paper already exists in database',
