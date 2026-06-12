@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const envConfig = require('./env');
 const ApiSource = require('../models/ApiSource');
+const Keyword = require('../models/Keyword');
 const authorKeywordService = require('../services/authorKeywordService');
 
 const DEFAULT_API_SOURCES = [
@@ -60,6 +61,37 @@ const seedApiSources = async () => {
   }
 };
 
+const repairLegacyKeywordIndexes = async () => {
+  try {
+    const indexes = await Keyword.collection.indexes();
+    const legacyOpenAlexIndex = indexes.find(
+      index =>
+        index.name === 'openalexId_1' &&
+        index.unique === true &&
+        !index.partialFilterExpression &&
+        !index.sparse
+    );
+
+    if (legacyOpenAlexIndex) {
+      await Keyword.collection.dropIndex('openalexId_1');
+      console.log('Dropped legacy Keyword.openalexId unique index');
+    }
+
+    await Keyword.collection.createIndex(
+      { openalexId: 1 },
+      {
+        name: 'openalexId_1',
+        unique: true,
+        partialFilterExpression: {
+          openalexId: { $type: 'string' },
+        },
+      }
+    );
+  } catch (error) {
+    console.error(`Keyword index repair failed: ${error.message}`);
+  }
+};
+
 /**
  * Connect to MongoDB Atlas
  * Uses MONGODB_URI from env config (trimmed, no surrounding quotes)
@@ -93,6 +125,7 @@ const connectDB = async () => {
     });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    await repairLegacyKeywordIndexes();
     await seedApiSources();
     authorKeywordService
       .classifyExistingKeywords()

@@ -104,6 +104,16 @@ const keywordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+keywordSchema.index(
+  { openalexId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      openalexId: { $type: 'string' },
+    },
+  }
+);
+
 keywordSchema.pre('validate', function (next) {
   if (!this.normalizedText && this.name) {
     this.normalizedText = String(this.name).trim().toLowerCase().replace(/\s+/g, ' ');
