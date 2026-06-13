@@ -155,9 +155,50 @@ const getPaperDetails = async (req, res, next) => {
 };
 
 // Save paper to database
+const normalizeSource = source => {
+  const value = String(source || '').toLowerCase().replace(/[-\s]/g, '_');
+  if (value === 'semanticscholar') return 'semantic_scholar';
+  return value;
+};
+
+const cleanDoi = doi => {
+  const value = String(doi || '').trim();
+  if (!value) return undefined;
+  return value.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim() || undefined;
+};
+
+const buildPaperLookupQuery = paper => {
+  const or = [];
+  if (paper?.doi) or.push({ doi: paper.doi });
+
+  for (const [source, externalId] of Object.entries(paper?.externalIds || {})) {
+    if (externalId) or.push({ [`externalIds.${source}`]: externalId });
+  }
+
+  if (paper?.title && paper?.source) {
+    or.push({ title: paper.title, source: paper.source });
+  }
+
+  return or.length ? { $or: or } : null;
+};
+
+const sanitizePaperInput = paper => ({
+  ...paper,
+  title: String(paper.title || '').trim(),
+  abstract: paper.abstract ? String(paper.abstract).slice(0, 5000) : undefined,
+  source: normalizeSource(paper.source),
+  doi: cleanDoi(paper.doi),
+  url: paper.url || undefined,
+  journalName: paper.journalName || undefined,
+  externalIds: Object.fromEntries(
+    Object.entries(paper.externalIds || {}).filter(([, value]) => Boolean(value))
+  ),
+});
+
 const savePaper = async (req, res, next) => {
+  let paper = null;
   try {
-    const { paper } = req.body;
+    paper = req.body.paper ? sanitizePaperInput(req.body.paper) : null;
 
     if (!paper) {
       return res.status(400).json({
@@ -166,18 +207,10 @@ const savePaper = async (req, res, next) => {
       });
     }
 
-    // Check if paper already exists
-    const existingPaper = paper.externalIds?.openalex
-      ? await Paper.findOne({
-          'externalIds.openalex': paper.externalIds.openalex,
-        })
-      : null;
-
-    if (existingPaper) {
-      return res.status(409).json({
+    if (!paper.title) {
+      return res.status(400).json({
         success: false,
-        message: 'Paper already exists in database',
-        paper: existingPaper,
+        message: 'paper.title is required',
       });
     }
 
@@ -188,8 +221,17 @@ const savePaper = async (req, res, next) => {
       });
     }
 
-    const newPaper = new Paper(paper);
-    await newPaper.save();
+    const lookupQuery = buildPaperLookupQuery(paper);
+    const existingPaper = lookupQuery ? await Paper.findOne(lookupQuery) : null;
+    if (existingPaper) {
+      return res.status(200).json({
+        success: true,
+        message: 'Paper already exists in database',
+        paper: existingPaper,
+      });
+    }
+
+    const newPaper = await Paper.create(paper);
 
     res.status(201).json({
       success: true,
@@ -199,23 +241,10 @@ const savePaper = async (req, res, next) => {
   } catch (error) {
     if (error.code === 11000) {
       try {
-        const query = {};
-        if (paper?.externalIds?.openalex) {
-          query['externalIds.openalex'] = paper.externalIds.openalex;
-        } else if (paper?.externalIds?.semanticScholar) {
-          query['externalIds.semanticScholar'] = paper.externalIds.semanticScholar;
-        } else if (paper?.doi) {
-          query.doi = paper.doi;
-        } else if (paper?.title) {
-          query.title = paper.title;
-        }
-
-        const existingPaper = Object.keys(query).length > 0
-          ? await Paper.findOne(query)
-          : null;
-
-        return res.status(409).json({
-          success: false,
+        const query = buildPaperLookupQuery(paper);
+        const existingPaper = query ? await Paper.findOne(query) : null;
+        return res.status(200).json({
+          success: true,
           message: 'Paper already exists in database',
           paper: existingPaper || undefined,
         });

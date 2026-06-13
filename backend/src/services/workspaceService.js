@@ -31,6 +31,12 @@ const normalizeTags = tags =>
     ? Array.from(new Set(tags.map(tag => normalizeText(tag)).filter(Boolean))).slice(0, 20)
     : [];
 
+const cleanDoi = doi => {
+  const value = String(doi || '').trim();
+  if (!value) return undefined;
+  return value.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').trim() || undefined;
+};
+
 const KEYWORD_STOPWORDS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'based', 'be', 'by', 'can', 'for', 'from',
   'has', 'have', 'in', 'into', 'is', 'it', 'its', 'model', 'models', 'of', 'on',
@@ -226,6 +232,11 @@ const findOrCreatePaper = async paperInput => {
   if (!paperInput.source) {
     throw createError('paper.source is required', 400);
   }
+
+  paperInput.title = String(paperInput.title || '').trim();
+  if (paperInput.abstract) paperInput.abstract = String(paperInput.abstract).slice(0, 5000);
+  paperInput.doi = cleanDoi(paperInput.doi);
+  if (paperInput.source === 'semanticscholar') paperInput.source = 'semantic_scholar';
 
   const or = [];
   if (paperInput.doi) or.push({ doi: paperInput.doi });
