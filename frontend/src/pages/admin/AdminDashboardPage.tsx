@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
+import axios from "axios"
 import {
   Users, Database, FileText, Activity, TrendingUp, TrendingDown,
   Clock, ArrowUpRight, Server, CheckCircle2, Bell, Loader2
@@ -146,17 +147,25 @@ export default function AdminDashboardPage() {
         const active = Array.isArray(runs)
           ? runs.filter((run: any) => run.status === "ingesting" || run.status === "analyzing").length
           : 0
-        setStats(s => ({ ...s, corpus: Array.isArray(runs) ? runs.length : 0, activeCorpus: active }))
+        // Lấy total papers từ tổng stats trong các runs
+        const totalPapers = Array.isArray(runs)
+          ? runs.reduce((sum: number, run: any) => sum + (run.stats?.totalPapers ?? 0), 0)
+          : 0
+        setStats(s => ({
+          ...s,
+          corpus: Array.isArray(runs) ? runs.length : 0,
+          activeCorpus: active,
+          papers: totalPapers,
+        }))
       })
       .catch(() => {})
 
-    // 3. Total papers
-    api.get("/papers", { params: { limit: 1 } })
-      .then(r => setStats(s => ({ ...s, papers: r.data.pagination?.total ?? r.data.total ?? 0 })))
-      .catch(() => {})
-
-    // 4. API health
-    api.get("/health")
+    // 3. API health — /health nằm ở root, không phải /api/v1/health
+    //    Dùng axios trực tiếp (không qua api instance có baseURL /api/v1)
+    const backendRoot = (import.meta.env.VITE_API_BASE_URL
+      ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, "")
+      : "")
+    axios.get(`${backendRoot}/health`)
       .then(() => setApiHealth("ok"))
       .catch(() => setApiHealth("error"))
 
