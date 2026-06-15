@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { useLocation, useNavigate, Link } from "react-router-dom"
-import { Loader2, BookOpen, Sparkles, Lock, Mail, User } from "lucide-react"
+import { Loader2, BookOpen, Sparkles, Lock, Mail, User, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import api from "@/lib/api"
 import { motion } from "framer-motion"
 
@@ -15,6 +16,8 @@ export default function AuthPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
+  const [role, setRole] = useState("student")
+  const [institution, setInstitution] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -25,7 +28,7 @@ export default function AuthPage() {
 
     try {
       const endpoint = isLogin ? "/auth/login" : "/auth/register"
-      const payload = isLogin ? { email, password } : { email, password, name }
+      const payload = isLogin ? { email, password } : { email, password, name, role, institution }
       const res = await api.post(endpoint, payload)
       // API returns { success, token, user } on both login and register
       localStorage.setItem("token", res.data.token)
@@ -139,17 +142,43 @@ export default function AuthPage() {
             )}
 
             {!isLogin && (
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  id="auth-name"
-                  placeholder="Full name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="pl-10 h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50"
-                />
-              </div>
+              <>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="auth-name"
+                    placeholder="Full name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="pl-10 h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50"
+                  />
+                </div>
+
+                <div className="relative">
+                  <Select value={role} onValueChange={setRole}>
+                    <SelectTrigger className="h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50">
+                      <SelectValue placeholder="Select your role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="researcher">Researcher</SelectItem>
+                      <SelectItem value="lecturer">Lecturer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="relative">
+                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="auth-institution"
+                    placeholder="Institution / University (Optional)"
+                    value={institution}
+                    onChange={(e) => setInstitution(e.target.value)}
+                    className="pl-10 h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50"
+                  />
+                </div>
+              </>
             )}
 
             <div className="relative">
