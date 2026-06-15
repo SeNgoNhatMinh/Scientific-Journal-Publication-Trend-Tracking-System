@@ -4,19 +4,38 @@ import { User, Mail, Shield, Settings, Camera, BookMarked, Activity, Key, LogOut
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import api from "@/lib/api"
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
   
   useEffect(() => {
-    const userStr = localStorage.getItem("user")
-    if (userStr) {
-      setUser(JSON.parse(userStr))
+    const fetchProfile = async () => {
+      try {
+        const res = await api.get("/auth/me")
+        if (res.data.success) {
+          setUser(res.data.user)
+          // Update local storage to keep it in sync
+          localStorage.setItem("user", JSON.stringify(res.data.user))
+        }
+      } catch (error) {
+        console.error("Failed to fetch profile:", error)
+        // Fallback to local storage if API fails
+        const userStr = localStorage.getItem("user")
+        if (userStr) {
+          setUser(JSON.parse(userStr))
+        }
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    fetchProfile()
   }, [])
 
-  if (!user) {
-    return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>
+  if (isLoading && !user) {
+    return <div className="p-8 text-center text-muted-foreground flex items-center justify-center min-h-[50vh]"><Activity className="animate-spin h-6 w-6 mr-2" /> Loading profile...</div>
   }
 
   const roleColor = user.role === 'admin' 
