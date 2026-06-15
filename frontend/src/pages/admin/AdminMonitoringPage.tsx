@@ -56,11 +56,15 @@ export default function AdminMonitoringPage() {
     setAiStatus("loading")
     setBackendStatus("loading")
 
-    // /health ở root level, không phải /api/v1 → gọi thẳng
+    // /health proxy qua Vite hoặc domain thật
     const backendRoot = import.meta.env.VITE_API_BASE_URL
       ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, "")
       : ""
-    axios.get(`${backendRoot}/health`)
+    // Nếu rỗng (chạy dev server), gọi /api/v1/health (cần map backend hoặc proxy)
+    // Sẽ gọi /api/v1/health cho an toàn, ta cần chỉnh backend hoặc Vite proxy.
+    const healthUrl = backendRoot ? `${backendRoot}/health` : "/health"
+    
+    axios.get(healthUrl)
       .then(() => setBackendStatus("ok"))
       .catch(() => setBackendStatus("error"))
 
@@ -103,7 +107,7 @@ export default function AdminMonitoringPage() {
 
   const fetchDbStats = async () => {
     const [papersRes, usersRes, runsRes] = await Promise.allSettled([
-      api.get("/papers", { params: { limit: 1 } }),
+      api.get("/papers/search", { params: { limit: 1 } }), // Dùng /search thay vì /papers (404)
       api.get("/users", { params: { limit: 1 } }),
       api.get("/corpus/runs"),
     ])
