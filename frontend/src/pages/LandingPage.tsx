@@ -3,6 +3,8 @@ import { motion } from "framer-motion"
 import { Search, TrendingUp, Sparkles, Network, ArrowRight, BookOpen, Zap, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useNavigate } from "react-router-dom"
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
+import Autoplay from "embla-carousel-autoplay"
 
 const Constellation = lazy(() => import("@/components/3d/Constellation"))
 
@@ -189,27 +191,45 @@ export default function LandingPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {trendingTopics.map((topic, i) => (
-            <motion.div
-              key={topic.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.8 + i * 0.08, duration: 0.5 }}
-              whileHover={{ y: -4 }}
-              onClick={() => navigate(`/search?keyword=${encodeURIComponent(topic.title)}`)}
-              className={`cursor-pointer glass rounded-xl p-5 border border-border/40 hover:border-primary/30 bg-gradient-to-br ${topic.color} transition-all duration-300 card-hover group`}
-            >
-              <p className={`text-xs font-semibold uppercase tracking-wider mb-2 px-2 py-0.5 rounded-full border inline-block ${topic.badge}`}>
-                {topic.category}
-              </p>
-              <h3 className="font-semibold text-base mb-3 group-hover:text-primary transition-colors">{topic.title}</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-emerald-400">{topic.growth}</span>
-                <span className="text-xs text-muted-foreground">publications this year</span>
-              </div>
-            </motion.div>
-          ))}
+        <div className="relative px-0 md:px-12">
+          <Carousel
+            opts={{
+              align: "start",
+              loop: true,
+            }}
+            plugins={[
+              Autoplay({
+                delay: 3000,
+              }),
+            ]}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-4">
+              {trendingTopics.map((topic, i) => (
+                <CarouselItem key={topic.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.8 + i * 0.08, duration: 0.5 }}
+                    whileHover={{ y: -4 }}
+                    onClick={() => navigate(`/search?keyword=${encodeURIComponent(topic.title)}`)}
+                    className={`h-full cursor-pointer glass rounded-xl p-5 border border-border/40 hover:border-primary/30 bg-gradient-to-br ${topic.color} transition-all duration-300 card-hover group`}
+                  >
+                    <p className={`text-xs font-semibold uppercase tracking-wider mb-2 px-2 py-0.5 rounded-full border inline-block ${topic.badge}`}>
+                      {topic.category}
+                    </p>
+                    <h3 className="font-semibold text-base mb-3 group-hover:text-primary transition-colors">{topic.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-emerald-400">{topic.growth}</span>
+                      <span className="text-xs text-muted-foreground">publications this year</span>
+                    </div>
+                  </motion.div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious className="hidden md:flex -left-12" />
+            <CarouselNext className="hidden md:flex -right-12" />
+          </Carousel>
         </div>
       </motion.div>
 
