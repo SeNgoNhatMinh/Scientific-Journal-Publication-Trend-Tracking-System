@@ -72,7 +72,9 @@ export default function AdminMonitoringPage() {
     api.get("/ai/health")
       .then(r => {
         setAiHealth(r.data)
-        setAiStatus(r.data?.status === "ok" || r.data?.success ? "ok" : "error")
+        // Nếu API trả về success=true nhưng status='unavailable' (catch trong controller) thì vẫn là error
+        const isOk = r.data?.status === "ok" || (r.data?.success && r.data?.status !== "unavailable")
+        setAiStatus(isOk ? "ok" : "error")
       })
       .catch(() => {
         setAiStatus("error")
@@ -107,7 +109,8 @@ export default function AdminMonitoringPage() {
 
   const fetchDbStats = async () => {
     const [papersRes, usersRes, runsRes] = await Promise.allSettled([
-      api.get("/papers/search", { params: { limit: 1 } }), // Dùng /search thay vì /papers (404)
+      // API search bắt buộc phải có keyword, thêm keyword="a" để lách luật đếm tổng số papers
+      api.get("/papers/search", { params: { limit: 1, keyword: "a" } }),
       api.get("/users", { params: { limit: 1 } }),
       api.get("/corpus/runs"),
     ])
