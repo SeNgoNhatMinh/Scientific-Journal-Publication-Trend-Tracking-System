@@ -104,7 +104,7 @@ export default function TrendsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 bg-white/60 dark:bg-black/40 backdrop-blur-md border-white/20 dark:border-white/10 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" /> Keyword Growth Analysis
@@ -213,7 +213,7 @@ export default function TrendsPage() {
         </Card>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="bg-white/60 dark:bg-black/40 backdrop-blur-md border-white/20 dark:border-white/10 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <TrendingUp className="h-5 w-5 text-orange-500" /> Hot Topics Now
@@ -241,7 +241,7 @@ export default function TrendsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-white/60 dark:bg-black/40 backdrop-blur-md border-white/20 dark:border-white/10 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BarChart2 className="h-5 w-5 text-blue-500" /> Compare Keywords
