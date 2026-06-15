@@ -29,7 +29,15 @@ export default function AuthPage() {
       const res = await api.post(endpoint, payload)
       // API returns { success, token, user } on both login and register
       localStorage.setItem("token", res.data.token)
-      navigate("/workspaces")
+      if (res.data.user) {
+        localStorage.setItem("user", JSON.stringify(res.data.user))
+      }
+      
+      if (res.data.user?.role === 'admin') {
+        navigate("/admin")
+      } else {
+        navigate("/workspaces")
+      }
     } catch (err: any) {
       console.error(err)
       setError(err.response?.data?.message || "An error occurred. Please try again.")

@@ -1,8 +1,6 @@
-import { Outlet } from "react-router-dom"
+import { Navigate, Outlet } from "react-router-dom"
 
 export default function AdminRoute() {
-  // Tạm thời tắt check Auth để bạn có thể xem UI mà không cần chạy Backend
-  /*
   const token = localStorage.getItem("token")
   const userStr = localStorage.getItem("user")
   
@@ -19,7 +17,6 @@ export default function AdminRoute() {
   } catch (e) {
     return <Navigate to="/login" replace />
   }
-  */
 
   return <Outlet />
 }

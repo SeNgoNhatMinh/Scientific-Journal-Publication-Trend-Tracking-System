@@ -1,8 +1,34 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Activity, Server, Database, Globe } from "lucide-react"
+import { Server, Globe, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import api from "@/lib/api"
 
 export default function AdminMonitoringPage() {
+  const [aiHealth, setAiHealth] = useState<any>(null)
+  const [isAiLoading, setIsAiLoading] = useState(true)
+
+  const fetchAiHealth = async () => {
+    setIsAiLoading(true)
+    try {
+      const res = await api.get('/ai/health')
+      setAiHealth(res.data)
+    } catch (err: any) {
+      console.error(err)
+      setAiHealth({ status: 'error', message: err.message })
+    } finally {
+      setIsAiLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchAiHealth()
+    
+    // Poll every 30 seconds
+    const interval = setInterval(fetchAiHealth, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
     <div className="space-y-6">
       <div>
@@ -52,10 +78,10 @@ export default function AdminMonitoringPage() {
                 <div className="h-3 w-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
                 <div>
                   <p className="font-medium">Main Backend API (Node.js)</p>
-                  <p className="text-xs text-muted-foreground">Uptime: 14d 2h 45m</p>
+                  <p className="text-xs text-muted-foreground">Status: Active</p>
                 </div>
               </div>
-              <span className="text-sm font-mono text-muted-foreground">42ms</span>
+              <span className="text-sm font-mono text-muted-foreground">OK</span>
             </div>
             
             <div className="flex items-center justify-between p-4 bg-muted/30 dark:bg-muted/10 rounded-lg border border-border/50 transition-colors hover:border-border">
@@ -63,21 +89,33 @@ export default function AdminMonitoringPage() {
                 <div className="h-3 w-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
                 <div>
                   <p className="font-medium">Database (MongoDB Atlas)</p>
-                  <p className="text-xs text-muted-foreground">Storage: 2.1GB / 5GB</p>
+                  <p className="text-xs text-muted-foreground">Status: Connected</p>
                 </div>
               </div>
-              <span className="text-sm font-mono text-muted-foreground">12ms</span>
+              <span className="text-sm font-mono text-muted-foreground">OK</span>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-muted/30 dark:bg-muted/10 rounded-lg border border-border/50 transition-colors hover:border-border">
               <div className="flex items-center gap-3">
-                <div className="h-3 w-3 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)] animate-pulse" />
+                {isAiLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : aiHealth?.status === 'ok' || aiHealth?.success ? (
+                  <div className="h-3 w-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+                ) : (
+                  <div className="h-3 w-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />
+                )}
                 <div>
                   <p className="font-medium">AI Service (Python FastAPI)</p>
-                  <p className="text-xs text-muted-foreground">High load detected</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isAiLoading ? 'Checking health...' : 
+                     (aiHealth?.status === 'ok' || aiHealth?.success) ? 'Status: Active' : 
+                     'Service Unreachable'}
+                  </p>
                 </div>
               </div>
-              <span className="text-sm font-mono text-muted-foreground">1.4s</span>
+              <span className="text-sm font-mono text-muted-foreground">
+                {isAiLoading ? '--' : (aiHealth?.status === 'ok' || aiHealth?.success) ? 'OK' : 'ERR'}
+              </span>
             </div>
           </CardContent>
         </Card>
