@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { Search, Bell, User, BookOpen, TrendingUp, Brain, Database, Library, LayoutDashboard, X, Menu, Sun, Moon } from "lucide-react"
+import { Search, Bell, User, BookOpen, TrendingUp, Brain, Database, Library, LayoutDashboard, X, Menu, Sun, Moon, Shield } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
@@ -55,7 +55,10 @@ export default function Navbar() {
   }
 
   const token = localStorage.getItem("token")
+  const userStr = localStorage.getItem("user")
+  const user = userStr ? JSON.parse(userStr) : null
   const isLoggedIn = !!token
+  const isAdmin = user?.role === 'admin'
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -160,6 +163,14 @@ export default function Navbar() {
                     My Account
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/profile")} className="gap-2 cursor-pointer font-medium">
+                    <User className="h-4 w-4" /> Profile
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => navigate("/admin")} className="gap-2 cursor-pointer text-primary font-medium">
+                      <Shield className="h-4 w-4" /> Admin Panel
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => navigate("/library")} className="gap-2 cursor-pointer">
                     <Library className="h-4 w-4" /> Library
                   </DropdownMenuItem>
