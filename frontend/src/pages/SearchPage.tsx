@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge"
 import api from "@/lib/api"
 import { formatText } from "@/lib/format"
+import { motion } from "framer-motion"
 
 // Matches GET /sources/search response shape
 interface PaperAuthor {
@@ -313,68 +314,77 @@ export default function SearchPage() {
               No results found. Try adjusting your search keywords or source.
             </div>
           ) : (
-            papers.map((paper) => (
-              <Card key={paper.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <CardTitle className="text-xl text-primary hover:underline cursor-pointer" onClick={() => openPaperDetails(paper)}>
-                        {formatText(paper.title, "Untitled paper")}
-                      </CardTitle>
-                      {paper.doi && (
-                        <a
-                          href={getDoiUrl(paper.doi)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 block text-xs text-primary hover:underline"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          DOI: {cleanDoi(paper.doi)}
-                        </a>
+            <motion.div 
+              initial="hidden" 
+              animate="show" 
+              variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }} 
+              className="space-y-4"
+            >
+              {papers.map((paper) => (
+                <motion.div key={paper.id} variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}>
+                  <Card className="hover:shadow-lg transition-all duration-300 bg-white/60 dark:bg-black/40 backdrop-blur-md border-white/20 dark:border-white/10 hover:border-primary/40">
+                    <CardHeader>
+                      <div className="flex justify-between items-start gap-4">
+                        <div>
+                          <CardTitle className="text-xl text-primary hover:underline cursor-pointer" onClick={() => openPaperDetails(paper)}>
+                            {formatText(paper.title, "Untitled paper")}
+                          </CardTitle>
+                          {paper.doi && (
+                            <a
+                              href={getDoiUrl(paper.doi)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 block text-xs text-primary hover:underline"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              DOI: {cleanDoi(paper.doi)}
+                            </a>
+                          )}
+                          <CardDescription className="mt-2 text-sm">
+                            {formatAuthors(paper.authors, paper.source)} • {paper.publicationYear || "N/A"}
+                            {paper.citationCount > 0 && ` • ${paper.citationCount} citations`}
+                          </CardDescription>
+                        </div>
+                        <Badge variant="secondary">{getSourceLabel(paper.source)}</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground line-clamp-3">
+                        {formatText(paper.abstract, "No abstract available.")}
+                      </p>
+                      {paper.journalName && (
+                        <p className="text-xs text-muted-foreground mt-2 italic">{paper.journalName}</p>
                       )}
-                      <CardDescription className="mt-2 text-sm">
-                        {formatAuthors(paper.authors, paper.source)} • {paper.publicationYear || "N/A"}
-                        {paper.citationCount > 0 && ` • ${paper.citationCount} citations`}
-                      </CardDescription>
-                    </div>
-                    <Badge variant="secondary">{getSourceLabel(paper.source)}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {formatText(paper.abstract, "No abstract available.")}
-                  </p>
-                  {paper.journalName && (
-                    <p className="text-xs text-muted-foreground mt-2 italic">{paper.journalName}</p>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between border-t pt-4">
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleBookmark(paper)} disabled={savingPaperId === paper.id}>
-                      {savingPaperId === paper.id ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Bookmark className="h-4 w-4 mr-2" />
-                      )}
-                      {savedPaperIds.has(paper.id) ? "Saved" : "Save"}
-                    </Button>
-                    {getSourceUrl(paper) && (
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={getSourceUrl(paper)} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-2" /> Source
-                        </a>
+                    </CardContent>
+                    <CardFooter className="flex justify-between border-t border-border/50 pt-4 bg-muted/20">
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleBookmark(paper)} disabled={savingPaperId === paper.id} className="backdrop-blur-sm bg-background/50">
+                          {savingPaperId === paper.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Bookmark className="h-4 w-4 mr-2" />
+                          )}
+                          {savedPaperIds.has(paper.id) ? "Saved" : "Save"}
+                        </Button>
+                        {getSourceUrl(paper) && (
+                          <Button variant="outline" size="sm" asChild className="backdrop-blur-sm bg-background/50">
+                            <a href={getSourceUrl(paper)} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-4 w-4 mr-2" /> Source
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => openPaperDetails(paper)} disabled={savingPaperId === paper.id}>
+                        {savingPaperId === paper.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : null}
+                        View Details
                       </Button>
-                    )}
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => openPaperDetails(paper)} disabled={savingPaperId === paper.id}>
-                    {savingPaperId === paper.id ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : null}
-                    View Details
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))
+                    </CardFooter>
+                  </Card>
+                </motion.div>
+              ))}
+            </motion.div>
           )}
         </div>
       </div>
