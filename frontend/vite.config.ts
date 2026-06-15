@@ -23,6 +23,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      '/health': {
+        target: 'https://scientific-journal-publication-trend-tracking-sy-production.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 })
