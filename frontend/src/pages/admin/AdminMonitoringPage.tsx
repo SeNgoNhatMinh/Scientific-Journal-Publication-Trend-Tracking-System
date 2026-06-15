@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
+import axios from "axios"
 import {
   Globe, Server, RefreshCw, Loader2, Wifi, WifiOff,
   AlertTriangle, CheckCircle2, Clock, Database, Activity
@@ -55,12 +56,15 @@ export default function AdminMonitoringPage() {
     setAiStatus("loading")
     setBackendStatus("loading")
 
-    // Backend health
-    api.get("/health")
+    // /health ở root level, không phải /api/v1 → gọi thẳng
+    const backendRoot = import.meta.env.VITE_API_BASE_URL
+      ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, "")
+      : ""
+    axios.get(`${backendRoot}/health`)
       .then(() => setBackendStatus("ok"))
       .catch(() => setBackendStatus("error"))
 
-    // AI health
+    // AI health ở /api/v1/ai/health
     api.get("/ai/health")
       .then(r => {
         setAiHealth(r.data)
@@ -79,31 +83,19 @@ export default function AdminMonitoringPage() {
   const fetchApiUsage = async () => {
     setUsageLoading(true)
     try {
-      // Use SyncLog to count requests per source
-      const res = await api.get("/corpus/sync-logs", { params: { limit: 1000 } })
-      const logs: any[] = res.data.logs ?? res.data.data ?? res.data ?? []
-      if (Array.isArray(logs)) {
-        const usage: Record<string, number> = {}
-        logs.forEach((log: any) => {
-          const src = (log.source ?? log.apiSource ?? "").toLowerCase()
-          if (src) usage[src] = (usage[src] ?? 0) + (log.requestCount ?? 1)
-        })
-        setApiUsage(usage)
-      }
-    } catch {
-      // Fallback: try SyncLog model via corpus runs
-      try {
-        const res2 = await api.get("/corpus/runs", { params: { limit: 200 } })
-        const runs: any[] = res2.data.runs ?? res2.data ?? []
-        const usage: Record<string, number> = {}
+      // Tính usage từ corpus runs (theo source)
+      const res = await api.get("/corpus/runs", { params: { limit: 200 } })
+      const runs: any[] = res.data.runs ?? res.data ?? []
+      const usage: Record<string, number> = {}
+      if (Array.isArray(runs)) {
         runs.forEach((run: any) => {
           const src = (run.source ?? "openalex").toLowerCase()
           usage[src] = (usage[src] ?? 0) + (run.stats?.totalPapers ?? 0)
         })
-        setApiUsage(usage)
-      } catch {
-        setApiUsage({})
       }
+      setApiUsage(usage)
+    } catch {
+      setApiUsage({})
     } finally {
       setUsageLoading(false)
     }
