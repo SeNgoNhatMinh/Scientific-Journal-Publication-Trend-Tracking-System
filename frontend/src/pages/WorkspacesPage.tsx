@@ -1,14 +1,31 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { FolderKanban, Plus, Loader2, ArrowRight } from "lucide-react"
+import { FolderKanban, Plus, ArrowRight, FileText, StickyNote, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import api from "@/lib/api"
+import { motion, AnimatePresence } from "framer-motion"
 
 // API: GET  /workspaces       → { success, workspaces, total, page, limit }
 // API: POST /workspaces       → body { name, description?, visibility?, plan? }
+
+const WORKSPACE_GRADIENTS = [
+  "from-violet-500/10 to-purple-500/5",
+  "from-cyan-500/10 to-blue-500/5",
+  "from-emerald-500/10 to-green-500/5",
+  "from-orange-500/10 to-amber-500/5",
+  "from-pink-500/10 to-rose-500/5",
+  "from-indigo-500/10 to-blue-500/5",
+]
 
 export default function WorkspacesPage() {
   const navigate = useNavigate()
@@ -21,7 +38,7 @@ export default function WorkspacesPage() {
   useEffect(() => {
     const fetchWorkspaces = async () => {
       try {
-        const res = await api.get('/workspaces')
+        const res = await api.get("/workspaces")
         setWorkspaces(res.data.workspaces || [])
       } catch (err: any) {
         console.error("Failed to fetch workspaces", err)
@@ -38,12 +55,11 @@ export default function WorkspacesPage() {
     if (!newWorkspaceName) return
     setIsDialogOpen(false)
     try {
-      const res = await api.post('/workspaces', { name: newWorkspaceName, description: newWorkspaceDesc })
+      const res = await api.post("/workspaces", { name: newWorkspaceName, description: newWorkspaceDesc })
       if (res.data.workspace) {
         setWorkspaces([...workspaces, res.data.workspace])
       } else {
-        // Refetch if response shape is different
-        const listRes = await api.get('/workspaces')
+        const listRes = await api.get("/workspaces")
         setWorkspaces(listRes.data.workspaces || [])
       }
     } catch (err: any) {
@@ -54,17 +70,31 @@ export default function WorkspacesPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-6">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+      >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Workspaces</h1>
-          <p className="text-muted-foreground">Organize your research papers, notes, and specific keyword trends.</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <FolderKanban className="h-7 w-7 text-primary" />
+            My Workspaces
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Organize your research papers, notes, and keyword trends.
+          </p>
         </div>
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> New Workspace</Button>
+            <Button className="gap-2 rounded-xl glow-primary">
+              <Plus className="h-4 w-4" /> New Workspace
+            </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="glass border-border/50 rounded-2xl">
             <form onSubmit={handleCreateWorkspace}>
               <DialogHeader>
                 <DialogTitle>Create New Workspace</DialogTitle>
@@ -72,70 +102,122 @@ export default function WorkspacesPage() {
                   Workspaces group related papers, notes, and generate mini research maps automatically.
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-4 space-y-4">
-                <Input 
-                  placeholder="Workspace Name (e.g., Computer Vision)" 
+              <div className="py-4 space-y-3">
+                <Input
+                  id="workspace-name"
+                  placeholder="Workspace Name (e.g., Computer Vision)"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
                   required
+                  className="h-11 rounded-xl bg-muted/30 border-border/50 focus-visible:border-primary/50"
                 />
-                <Input 
-                  placeholder="Short Description" 
+                <Input
+                  id="workspace-desc"
+                  placeholder="Short Description (optional)"
                   value={newWorkspaceDesc}
                   onChange={(e) => setNewWorkspaceDesc(e.target.value)}
+                  className="h-11 rounded-xl bg-muted/30 border-border/50 focus-visible:border-primary/50"
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">Create Workspace</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button type="submit" className="rounded-xl">Create Workspace</Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </motion.div>
 
       {isLoading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : workspaces.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-lg bg-muted/20">
-          <h3 className="text-lg font-medium mb-2">No workspaces yet</h3>
-          <p className="text-muted-foreground mb-4">Create your first workspace to start organizing your research.</p>
-          <Button onClick={() => setIsDialogOpen(true)}>Create Workspace</Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {workspaces.map((ws) => (
-            <Card key={ws._id} className="hover:shadow-md transition-shadow cursor-pointer flex flex-col" onClick={() => navigate(`/workspaces/${ws._id}`)}>
-              <CardHeader>
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <FolderKanban className="h-5 w-5 text-primary" />
-                  {ws.name}
-                </CardTitle>
-                <CardDescription className="line-clamp-2">
-                  {ws.description || "No description provided."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <div className="flex gap-4 text-sm text-muted-foreground">
-                  {ws.stats && (
-                    <>
-                      <div><strong>{ws.stats.papers || 0}</strong> Papers</div>
-                      <div><strong>{ws.stats.notes || 0}</strong> Notes</div>
-                      <div><strong>{ws.stats.members || 0}</strong> Members</div>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter className="pt-4 border-t flex justify-end">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  Open Workspace <ArrowRight className="h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="glass rounded-2xl border border-border/40 p-5 space-y-3">
+              <div className="shimmer h-5 w-1/2" />
+              <div className="shimmer h-3 w-3/4" />
+              <div className="shimmer h-8 w-full mt-4" />
+            </div>
           ))}
         </div>
+      ) : workspaces.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-24 glass rounded-2xl border border-dashed border-border/50"
+        >
+          <FolderKanban className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
+          <h3 className="text-base font-semibold mb-2">No workspaces yet</h3>
+          <p className="text-sm text-muted-foreground mb-5">
+            Create your first workspace to start organizing your research.
+          </p>
+          <Button onClick={() => setIsDialogOpen(true)} className="rounded-xl gap-2">
+            <Plus className="h-4 w-4" /> Create Workspace
+          </Button>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-5"
+        >
+          <AnimatePresence>
+            {workspaces.map((ws, i) => {
+              const gradient = WORKSPACE_GRADIENTS[i % WORKSPACE_GRADIENTS.length]
+              return (
+                <motion.div
+                  key={ws._id}
+                  variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                >
+                  <button
+                    onClick={() => navigate(`/workspaces/${ws._id}`)}
+                    className={`w-full text-left glass rounded-2xl border border-border/40 hover:border-primary/30 transition-all duration-300 card-hover overflow-hidden group bg-gradient-to-br ${gradient}`}
+                  >
+                    {/* Card body */}
+                    <div className="p-5">
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                          <FolderKanban className="h-5 w-5 text-primary" />
+                        </div>
+                        <h3 className="font-semibold text-base group-hover:text-primary transition-colors">
+                          {ws.name}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                        {ws.description || "No description provided."}
+                      </p>
+
+                      {ws.stats && (
+                        <div className="flex gap-4 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            <strong className="text-foreground">{ws.stats.papers || 0}</strong> Papers
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <StickyNote className="h-3 w-3" />
+                            <strong className="text-foreground">{ws.stats.notes || 0}</strong> Notes
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            <strong className="text-foreground">{ws.stats.members || 0}</strong> Members
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex justify-end px-5 py-3 border-t border-border/30 bg-muted/10">
+                      <span className="text-xs text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
+                        Open Workspace <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
+                    </div>
+                  </button>
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
+        </motion.div>
       )}
     </div>
   )

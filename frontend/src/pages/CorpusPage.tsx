@@ -1,16 +1,32 @@
 import { useState, useEffect } from "react"
-import { Database, Plus, Loader2, PlayCircle, CheckCircle2, AlertCircle } from "lucide-react"
+import { Database, Plus, Loader2, CheckCircle2, AlertCircle, PlayCircle, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { useNavigate } from "react-router-dom"
 import api from "@/lib/api"
+import { motion, AnimatePresence } from "framer-motion"
 
 // API: POST /corpus/runs  → body { seedKeyword, source?, startYear?, endYear?, maxPages?, perPage? }
 // API: GET  /corpus/runs   → { success, runs: [{_id, seedKeyword, status, paperCount, createdAt, ...}] }
 // API: GET  /corpus/runs/:id → { success, run: {_id, seedKeyword, status, paperCount, yearlyData, trendStatus, ...} }
+
+const STATUS_CONFIG: Record<string, { label: string; icon: any; cls: string; iconCls: string }> = {
+  completed: { label: "Completed", icon: CheckCircle2, cls: "status-completed", iconCls: "text-emerald-400" },
+  failed:    { label: "Failed",    icon: AlertCircle,  cls: "status-failed",    iconCls: "text-red-400" },
+  pending:   { label: "Pending",   icon: Loader2,      cls: "status-running",   iconCls: "text-cyan-400 animate-spin" },
+  ingesting: { label: "Ingesting Papers", icon: Loader2, cls: "status-running", iconCls: "text-cyan-400 animate-spin" },
+  analyzing: { label: "AI Analyzing",    icon: Loader2, cls: "status-running", iconCls: "text-cyan-400 animate-spin" },
+}
 
 export default function CorpusPage() {
   const navigate = useNavigate()
@@ -21,7 +37,7 @@ export default function CorpusPage() {
 
   const fetchRuns = async () => {
     try {
-      const res = await api.get('/corpus/runs')
+      const res = await api.get("/corpus/runs")
       setRuns(res.data.runs || [])
     } catch (err: any) {
       console.error("Failed to fetch corpus runs", err)
@@ -31,18 +47,13 @@ export default function CorpusPage() {
     }
   }
 
-  useEffect(() => {
-    fetchRuns()
-  }, [])
+  useEffect(() => { fetchRuns() }, [])
 
   // Poll active runs every 5s
   useEffect(() => {
-    const hasActive = runs.some(r => r.status === 'pending' || r.status === 'ingesting' || r.status === 'analyzing')
+    const hasActive = runs.some((r) => r.status === "pending" || r.status === "ingesting" || r.status === "analyzing")
     if (!hasActive) return
-
-    const interval = setInterval(() => {
-      fetchRuns()
-    }, 5000)
+    const interval = setInterval(() => { fetchRuns() }, 5000)
     return () => clearInterval(interval)
   }, [runs])
 
@@ -51,8 +62,7 @@ export default function CorpusPage() {
     if (!newRunKeyword) return
     setIsDialogOpen(false)
     try {
-      // API: POST /corpus/runs — body uses seedKeyword (not topic)
-      await api.post('/corpus/runs', { seedKeyword: newRunKeyword })
+      await api.post("/corpus/runs", { seedKeyword: newRunKeyword })
       fetchRuns()
     } catch (err: any) {
       console.error(err)
@@ -60,37 +70,34 @@ export default function CorpusPage() {
     setNewRunKeyword("")
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle2 className="h-5 w-5 text-green-500" />
-      case 'failed': return <AlertCircle className="h-5 w-5 text-red-500" />
-      default: return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return "Pending"
-      case 'ingesting': return "Ingesting Papers"
-      case 'analyzing': return "AI Analyzing"
-      case 'completed': return "Completed"
-      case 'failed': return "Failed"
-      default: return status
-    }
-  }
+  const isActive = (status: string) => ["pending", "ingesting", "analyzing"].includes(status)
 
   return (
-    <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-6">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+      >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Corpus Management</h1>
-          <p className="text-muted-foreground">Track and manage large-scale topic tracking runs.</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Database className="h-7 w-7 text-primary" />
+            Corpus Management
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Start topic tracking runs to ingest and analyze academic papers at scale.
+          </p>
         </div>
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> New Tracking Run</Button>
+            <Button className="gap-2 rounded-xl glow-primary">
+              <Plus className="h-4 w-4" /> New Tracking Run
+            </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="glass border-border/50 rounded-2xl">
             <form onSubmit={handleCreateRun}>
               <DialogHeader>
                 <DialogTitle>Create New Tracking Run</DialogTitle>
@@ -99,92 +106,150 @@ export default function CorpusPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4">
-                <Input 
-                  placeholder="e.g., federated learning" 
+                <Input
+                  id="corpus-new-keyword"
+                  placeholder="e.g., federated learning"
                   value={newRunKeyword}
                   onChange={(e) => setNewRunKeyword(e.target.value)}
+                  className="h-11 rounded-xl bg-muted/30 border-border/50 focus-visible:border-primary/50"
                 />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">Start Processing</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button type="submit" className="rounded-xl">Start Processing</Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </motion.div>
 
+      {/* Content */}
       {isLoading ? (
         <div className="flex justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="h-10 w-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         </div>
       ) : runs.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-lg bg-muted/20">
-          <h3 className="text-lg font-medium mb-2">No corpus runs yet</h3>
-          <p className="text-muted-foreground mb-4">Start a new tracking run to begin ingesting and analyzing papers.</p>
-          <Button onClick={() => setIsDialogOpen(true)}>Create Your First Run</Button>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-20 glass rounded-2xl border border-dashed border-border/50"
+        >
+          <Database className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
+          <h3 className="text-base font-semibold mb-2">No corpus runs yet</h3>
+          <p className="text-sm text-muted-foreground mb-5">
+            Start a new tracking run to begin ingesting and analyzing papers.
+          </p>
+          <Button onClick={() => setIsDialogOpen(true)} className="rounded-xl gap-2">
+            <Plus className="h-4 w-4" /> Create Your First Run
+          </Button>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {runs.map((run) => (
-            <Card key={run._id} className="overflow-hidden">
-              <CardHeader className="bg-muted/30 pb-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Database className="h-5 w-5 text-muted-foreground" />
-                      {run.seedKeyword}
-                    </CardTitle>
-                    <CardDescription className="mt-1 flex items-center gap-3">
-                      <span>Started {new Date(run.createdAt).toLocaleString()}</span>
-                      {run.paperCount > 0 && <Badge variant="outline">{run.paperCount} papers</Badge>}
-                      {run.trendStatus && <Badge variant="secondary" className="capitalize">{run.trendStatus}</Badge>}
-                    </CardDescription>
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }}
+          className="space-y-4"
+        >
+          <AnimatePresence>
+            {runs.map((run) => {
+              const conf = STATUS_CONFIG[run.status] ?? STATUS_CONFIG.pending
+              const active = isActive(run.status)
+              return (
+                <motion.div
+                  key={run._id}
+                  variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
+                  className="glass rounded-2xl border border-border/40 overflow-hidden"
+                >
+                  {/* Card header */}
+                  <div className="flex items-start justify-between p-5 pb-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Database className="h-4 w-4 text-primary shrink-0" />
+                        <h3 className="font-semibold text-base truncate">{run.seedKeyword}</h3>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                        <span>Started {new Date(run.createdAt).toLocaleString()}</span>
+                        {run.paperCount > 0 && (
+                          <Badge variant="outline" className="text-xs rounded-full">
+                            {run.paperCount} papers
+                          </Badge>
+                        )}
+                        {run.trendStatus && (
+                          <Badge variant="secondary" className="text-xs rounded-full capitalize">
+                            {run.trendStatus}
+                          </Badge>
+                        )}
+                      </p>
+                    </div>
+                    {/* Status pill */}
+                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium shrink-0 ml-3 ${conf.cls}`}>
+                      <conf.icon className={`h-3.5 w-3.5 ${conf.iconCls}`} />
+                      {conf.label}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-1 bg-background rounded-full border shadow-sm">
-                    {getStatusIcon(run.status)}
-                    <span className="text-sm font-medium capitalize">{getStatusText(run.status)}</span>
+
+                  {/* Active pipeline bar */}
+                  {active && (
+                    <div className="h-10 mx-5 mb-4 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center relative overflow-hidden">
+                      {/* Scan line */}
+                      <div
+                        className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent"
+                        style={{ animation: "scan-line 2s linear infinite" }}
+                      />
+                      <span className="relative z-10 text-xs font-medium text-cyan-400 flex items-center gap-2">
+                        <PlayCircle className="h-3.5 w-3.5 animate-pulse" />
+                        Processing Pipeline Active — {conf.label}...
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Error message */}
+                  {run.status === "failed" && run.errorMessage && (
+                    <div className="mx-5 mb-4 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+                      Error: {run.errorMessage}
+                    </div>
+                  )}
+
+                  {/* Footer actions */}
+                  <div className="flex justify-end gap-2 px-5 pb-5">
+                    {run.status === "completed" && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 text-xs rounded-lg text-muted-foreground hover:text-primary"
+                          onClick={() => navigate("/trends")}
+                        >
+                          View Trends <ArrowRight className="h-3 w-3 ml-1" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs rounded-lg"
+                          onClick={() => navigate(`/insights?runId=${run._id}&keyword=${encodeURIComponent(run.seedKeyword)}`)}
+                        >
+                          View Graph
+                        </Button>
+                      </>
+                    )}
+                    {run.status === "failed" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs rounded-lg"
+                        onClick={() => { setNewRunKeyword(run.seedKeyword); setIsDialogOpen(true) }}
+                      >
+                        Retry
+                      </Button>
+                    )}
                   </div>
-                </div>
-              </CardHeader>
-              
-              {/* Pipeline animation for active runs */}
-              {(run.status === 'pending' || run.status === 'ingesting' || run.status === 'analyzing') && (
-                <div className="h-16 bg-blue-500/10 flex items-center justify-center border-y border-blue-500/20 relative overflow-hidden">
-                  <span className="relative z-10 text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                    <PlayCircle className="h-4 w-4 animate-pulse" />
-                    Processing Pipeline Active — {getStatusText(run.status)}...
-                  </span>
-                </div>
-              )}
-
-              {run.status === 'failed' && run.errorMessage && (
-                <div className="bg-destructive/10 text-destructive p-3 text-sm border-y border-destructive/20 font-medium px-6">
-                  Error: {run.errorMessage}
-                </div>
-              )}
-
-              <CardFooter className="pt-4 flex justify-end bg-card gap-2">
-                {run.status === 'completed' && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => navigate(`/trends`)}>
-                      View Trends
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => navigate(`/insights?runId=${run._id}&keyword=${encodeURIComponent(run.seedKeyword)}`)}>
-                      View Graph
-                    </Button>
-                  </>
-                )}
-                {run.status === 'failed' && (
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setNewRunKeyword(run.seedKeyword)
-                    setIsDialogOpen(true)
-                  }}>Retry</Button>
-                )}
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
+        </motion.div>
       )}
     </div>
   )

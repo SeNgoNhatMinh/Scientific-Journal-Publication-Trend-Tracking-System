@@ -1,30 +1,60 @@
-import { Suspense, lazy } from "react"
+import { Suspense, lazy, useState } from "react"
 import { motion } from "framer-motion"
-import { Search, TrendingUp, Sparkles, Network, ArrowRight } from "lucide-react"
+import { Search, TrendingUp, Sparkles, Network, ArrowRight, BookOpen, Zap, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { useNavigate } from "react-router-dom"
-import { useState } from "react"
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel"
-import { Card, CardContent } from "@/components/ui/card"
 
 const Constellation = lazy(() => import("@/components/3d/Constellation"))
 
-// Dummy data for Trending Topics
 const trendingTopics = [
-  { id: 1, title: "Federated Learning", category: "Machine Learning", growth: "+124%" },
-  { id: 2, title: "Quantum Computing", category: "Physics & CS", growth: "+89%" },
-  { id: 3, title: "Large Language Models", category: "Artificial Intelligence", growth: "+312%" },
-  { id: 4, title: "CRISPR Cas9", category: "Biotechnology", growth: "+45%" },
-  { id: 5, title: "Solid State Batteries", category: "Materials Science", growth: "+67%" },
-  { id: 6, title: "Neuromorphic Computing", category: "Hardware", growth: "+110%" },
+  { id: 1, title: "Federated Learning", category: "Machine Learning", growth: "+124%", color: "from-violet-500/20 to-purple-500/10", badge: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
+  { id: 2, title: "Quantum Computing", category: "Physics & CS", growth: "+89%", color: "from-cyan-500/20 to-blue-500/10", badge: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10" },
+  { id: 3, title: "Large Language Models", category: "Artificial Intelligence", growth: "+312%", color: "from-pink-500/20 to-rose-500/10", badge: "text-pink-400 border-pink-500/30 bg-pink-500/10" },
+  { id: 4, title: "CRISPR Cas9", category: "Biotechnology", growth: "+45%", color: "from-emerald-500/20 to-green-500/10", badge: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  { id: 5, title: "Solid State Batteries", category: "Materials Science", growth: "+67%", color: "from-orange-500/20 to-amber-500/10", badge: "text-orange-400 border-orange-500/30 bg-orange-500/10" },
+  { id: 6, title: "Neuromorphic Computing", category: "Hardware", growth: "+110%", color: "from-blue-500/20 to-indigo-500/10", badge: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
 ]
+
+const features = [
+  {
+    icon: Search,
+    title: "Live Search",
+    description: "Instantly query millions of academic papers from OpenAlex, Semantic Scholar, Crossref, and more.",
+    color: "text-violet-400",
+    bg: "bg-violet-500/10 border-violet-500/20",
+  },
+  {
+    icon: TrendingUp,
+    title: "Trend Analysis",
+    description: "Track keyword growth rates, find exploding topics, and compare research interests over time.",
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10 border-cyan-500/20",
+  },
+  {
+    icon: Network,
+    title: "Keyword Graphs",
+    description: "Visualize semantic relationships between algorithms, domains, and methods in 2D and 3D.",
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10 border-emerald-500/20",
+  },
+]
+
+const stats = [
+  { value: "200M+", label: "Papers Indexed", icon: BookOpen },
+  { value: "Real-time", label: "Trend Tracking", icon: Zap },
+  { value: "AI-powered", label: "Research Insights", icon: Sparkles },
+  { value: "5 Sources", label: "Academic Databases", icon: BarChart3 },
+]
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.12 } },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" as const } },
+}
 
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -38,142 +68,185 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="relative flex-1 flex flex-col items-center overflow-hidden min-h-[calc(100vh-3.5rem)] pt-20 pb-16">
+    <div className="relative flex-1 flex flex-col items-center overflow-hidden min-h-[calc(100vh-3.5rem)]">
       {/* 3D Background */}
       <Suspense fallback={null}>
         <Constellation />
       </Suspense>
 
-      {/* Hero Content */}
-      <div className="z-10 flex flex-col items-center text-center px-4 max-w-5xl mx-auto space-y-8 w-full">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="flex flex-col items-center"
-        >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary mb-8 text-sm font-semibold border border-primary/20 shadow-[0_0_15px_rgba(var(--primary),0.2)]">
-            <Sparkles className="h-4 w-4" />
-            Discover what the world is researching
+      {/* Hero Section */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="z-10 flex flex-col items-center text-center px-4 max-w-5xl mx-auto w-full pt-20 pb-10"
+      >
+        {/* Badge */}
+        <motion.div variants={itemVariants}>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-sm font-medium mb-8 backdrop-blur-sm">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI-powered scientific journal analytics
           </div>
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight lg:text-8xl mb-6 bg-clip-text text-transparent bg-gradient-to-br from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:via-purple-200 dark:to-gray-400 drop-shadow-sm">
-            Scientific Journal <br /> Publication Trends
-          </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Track emerging topics, analyze academic growth, and find the right algorithms for your research domain with our advanced analytics engine.
-          </p>
         </motion.div>
 
-        <motion.form
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-          onSubmit={handleSearch}
-          className="w-full max-w-2xl flex relative mt-4 group"
+        {/* Headline */}
+        <motion.h1
+          variants={itemVariants}
+          className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tight mb-6 leading-[1.05]"
         >
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground group-focus-within:text-primary transition-colors z-10" />
-          <Input
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            className="w-full pl-16 pr-32 h-16 text-lg md:text-xl rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.05)] border-2 border-white/20 dark:border-white/10 bg-white/60 dark:bg-black/40 backdrop-blur-xl focus-visible:ring-primary focus-visible:ring-offset-2 transition-all"
-            placeholder="E.g., federated learning..."
-          />
-          <Button 
-            type="submit" 
-            size="lg"
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-8 h-12 text-base font-semibold shadow-lg hover:shadow-primary/25 transition-all"
-          >
-            Search
-          </Button>
-        </motion.form>
+          <span className="gradient-text">Discover</span>
+          <br />
+          <span className="text-foreground">Research Trends</span>
+        </motion.h1>
 
-        {/* Trending Topics Carousel Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-          className="w-full mt-16 pt-8 border-t border-border/50"
+        <motion.p
+          variants={itemVariants}
+          className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed mb-10"
         >
-          <div className="flex items-center justify-between mb-6 px-4">
-            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              <TrendingUp className="h-6 w-6 text-primary" />
-              Trending Topics
-            </h2>
-            <Button variant="ghost" className="gap-2" onClick={() => navigate('/trends')}>
-              View all trends <ArrowRight className="h-4 w-4" />
+          Track emerging topics, analyze academic publication velocity, and find the next breakthrough research direction with our advanced analytics engine.
+        </motion.p>
+
+        {/* Search Bar */}
+        <motion.form
+          variants={itemVariants}
+          onSubmit={handleSearch}
+          className="w-full max-w-2xl relative group"
+        >
+          <div className="relative flex items-center">
+            <Search className="absolute left-5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors z-10 pointer-events-none" />
+            <input
+              id="hero-search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              className="w-full pl-14 pr-36 h-16 text-base md:text-lg rounded-2xl border border-border/50 bg-background/60 backdrop-blur-xl focus:outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all shadow-xl placeholder:text-muted-foreground/50"
+              placeholder="e.g., federated learning, transformer models..."
+            />
+            <Button
+              type="submit"
+              size="lg"
+              className="absolute right-2 rounded-xl px-6 h-12 text-sm font-semibold shadow-lg hover:shadow-primary/30 transition-all glow-primary"
+            >
+              Search
             </Button>
           </div>
-          
-          <Carousel
-            opts={{
-              align: "start",
-              loop: true,
-            }}
-            className="w-full px-4"
-          >
-            <CarouselContent className="-ml-4">
-              {trendingTopics.map((topic, index) => (
-                <CarouselItem key={topic.id} className="pl-4 md:basis-1/2 lg:basis-1/3">
-                  <motion.div whileHover={{ y: -5 }} transition={{ duration: 0.2 }}>
-                    <Card className="bg-white/40 dark:bg-black/40 backdrop-blur-md border-white/20 dark:border-white/10 overflow-hidden cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate(`/search?keyword=${encodeURIComponent(topic.title)}`)}>
-                      <CardContent className="p-6 flex flex-col justify-between h-full aspect-[2/1]">
-                        <div>
-                          <p className="text-xs font-medium text-primary uppercase tracking-wider mb-2">{topic.category}</p>
-                          <h3 className="font-semibold text-lg line-clamp-2">{topic.title}</h3>
-                        </div>
-                        <div className="flex items-center gap-2 mt-4">
-                          <span className="inline-flex items-center rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-500 ring-1 ring-inset ring-green-500/20">
-                            {topic.growth}
-                          </span>
-                          <span className="text-xs text-muted-foreground">growth this year</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <CarouselPrevious className="hidden md:flex -left-4 bg-background/80 backdrop-blur-sm" />
-            <CarouselNext className="hidden md:flex -right-4 bg-background/80 backdrop-blur-sm" />
-          </Carousel>
-        </motion.div>
+          <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-primary/20 to-accent/20 blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity -z-10" />
+        </motion.form>
 
-        {/* Features Grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-16 w-full"
-        >
-          <div className="group flex flex-col items-center p-8 bg-white/40 dark:bg-black/40 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 dark:border-white/10 hover:border-primary/30 transition-all duration-300">
-            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
-              <Search className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="font-bold text-xl mb-3">Live Search</h3>
-            <p className="text-muted-foreground text-center leading-relaxed">
-              Instantly query millions of papers from OpenAlex, Semantic Scholar, and more.
-            </p>
-          </div>
-          <div className="group flex flex-col items-center p-8 bg-white/40 dark:bg-black/40 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 dark:border-white/10 hover:border-primary/30 transition-all duration-300">
-            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
-              <TrendingUp className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="font-bold text-xl mb-3">Trend Analysis</h3>
-            <p className="text-muted-foreground text-center leading-relaxed">
-              Track keyword growth rates, find exploding topics, and compare research interests.
-            </p>
-          </div>
-          <div className="group flex flex-col items-center p-8 bg-white/40 dark:bg-black/40 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 dark:border-white/10 hover:border-primary/30 transition-all duration-300">
-            <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/20 transition-all duration-300">
-              <Network className="h-8 w-8 text-primary" />
-            </div>
-            <h3 className="font-bold text-xl mb-3">Keyword Graphs</h3>
-            <p className="text-muted-foreground text-center leading-relaxed">
-              Visualize the semantic relationships between algorithms, domains, and methods.
-            </p>
-          </div>
+        {/* Quick suggestions */}
+        <motion.div variants={itemVariants} className="flex flex-wrap justify-center gap-2 mt-4">
+          {["LLM", "Computer Vision", "Reinforcement Learning", "Graph Neural Networks"].map((s) => (
+            <button
+              key={s}
+              onClick={() => navigate(`/search?keyword=${encodeURIComponent(s)}`)}
+              className="text-xs px-3 py-1 rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all backdrop-blur-sm"
+            >
+              {s}
+            </button>
+          ))}
         </motion.div>
-      </div>
+      </motion.div>
+
+      {/* Stats bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6, duration: 0.6 }}
+        className="z-10 w-full max-w-5xl mx-auto px-4 mb-16"
+      >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {stats.map(({ value, label, icon: Icon }) => (
+            <div
+              key={label}
+              className="glass rounded-xl p-4 flex flex-col items-center text-center border border-border/40 hover:border-primary/30 transition-colors"
+            >
+              <Icon className="h-5 w-5 text-primary mb-2" />
+              <div className="font-bold text-lg text-foreground">{value}</div>
+              <div className="text-xs text-muted-foreground">{label}</div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Trending Topics */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.7, duration: 0.7 }}
+        className="z-10 w-full max-w-5xl mx-auto px-4 mb-16"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Trending Now
+          </h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 text-muted-foreground hover:text-primary text-sm"
+            onClick={() => navigate("/trends")}
+          >
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {trendingTopics.map((topic, i) => (
+            <motion.div
+              key={topic.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 + i * 0.08, duration: 0.5 }}
+              whileHover={{ y: -4 }}
+              onClick={() => navigate(`/search?keyword=${encodeURIComponent(topic.title)}`)}
+              className={`cursor-pointer glass rounded-xl p-5 border border-border/40 hover:border-primary/30 bg-gradient-to-br ${topic.color} transition-all duration-300 card-hover group`}
+            >
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-2 px-2 py-0.5 rounded-full border inline-block ${topic.badge}`}>
+                {topic.category}
+              </p>
+              <h3 className="font-semibold text-base mb-3 group-hover:text-primary transition-colors">{topic.title}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-emerald-400">{topic.growth}</span>
+                <span className="text-xs text-muted-foreground">publications this year</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Feature Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9, duration: 0.7 }}
+        className="z-10 w-full max-w-5xl mx-auto px-4 pb-20"
+      >
+        <div className="text-center mb-10">
+          <h2 className="text-2xl md:text-3xl font-bold mb-3">
+            Everything you need for{" "}
+            <span className="gradient-text">research intelligence</span>
+          </h2>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            From raw paper searches to deep AI-powered insights, SciTrend covers every step of your research journey.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {features.map(({ icon: Icon, title, description, color, bg }, i) => (
+            <motion.div
+              key={title}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 + i * 0.1, duration: 0.5 }}
+              className="group glass rounded-2xl p-6 border border-border/40 hover:border-primary/30 transition-all duration-300 card-hover"
+            >
+              <div className={`h-12 w-12 rounded-xl border flex items-center justify-center mb-5 ${bg} group-hover:scale-110 transition-transform duration-300`}>
+                <Icon className={`h-6 w-6 ${color}`} />
+              </div>
+              <h3 className="font-bold text-lg mb-2">{title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
     </div>
   )
 }
