@@ -13,6 +13,7 @@ import WorkspacesPage from "./pages/WorkspacesPage"
 import WorkspaceDetailsPage from "./pages/WorkspaceDetailsPage"
 import ProtectedRoute from "./components/layout/ProtectedRoute"
 import AdminRoute from "./components/layout/AdminRoute"
+import ProfilePage from "./pages/ProfilePage"
 
 // Admin Pages
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage"
@@ -39,6 +40,7 @@ function App() {
             <Route path="library" element={<LibraryPage />} />
             <Route path="workspaces" element={<WorkspacesPage />} />
             <Route path="workspaces/:id" element={<WorkspaceDetailsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>
 
