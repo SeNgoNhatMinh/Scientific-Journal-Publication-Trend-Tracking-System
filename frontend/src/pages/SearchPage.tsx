@@ -44,6 +44,8 @@ export default function SearchPage() {
   const [keyword, setKeyword] = useState(initialKeyword)
   const [source, setSource] = useState("openalex")
   const [year, setYear] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageInput, setPageInput] = useState("1")
 
   const [papers, setPapers] = useState<Paper[]>([])
   const [total, setTotal] = useState(0)
@@ -76,16 +78,18 @@ export default function SearchPage() {
     return providerMessage || "Failed to fetch results. Please try again."
   }
 
-  const fetchResults = async (query: string, sourceOverride = source) => {
+  const fetchResults = async (query: string, sourceOverride = source, pageNum = 1) => {
     if (!query) return
     setIsLoading(true)
     setError("")
     try {
-      const params: any = { keyword: query, source: sourceOverride }
+      const params: any = { keyword: query, source: sourceOverride, page: pageNum }
       if (year) params.year = parseInt(year)
       const res = await api.get(`/sources/search`, { params })
       setPapers(res.data.papers || [])
       setTotal(res.data.total || 0)
+      setPage(pageNum)
+      setPageInput(pageNum.toString())
       // Fetch suggestions sau khi có kết quả
       fetchSuggestions(query)
     } catch (err: any) {
@@ -112,7 +116,7 @@ export default function SearchPage() {
   }
 
   useEffect(() => {
-    if (initialKeyword) fetchResults(initialKeyword)
+    if (initialKeyword) fetchResults(initialKeyword, source, 1)
   }, [initialKeyword])
 
   const handleSearch = (e: React.FormEvent) => {
@@ -300,7 +304,7 @@ export default function SearchPage() {
               </div>
               <Button
                 className="w-full h-9 rounded-lg text-sm"
-                onClick={() => fetchResults(initialKeyword || keyword)}
+                onClick={() => fetchResults(initialKeyword || keyword, source, 1)}
               >
                 Apply Filters
               </Button>
@@ -332,7 +336,7 @@ export default function SearchPage() {
                   variant="outline"
                   size="sm"
                   className="mt-3"
-                  onClick={() => { setSource("openalex"); fetchResults(initialKeyword || keyword, "openalex") }}
+                  onClick={() => { setSource("openalex"); fetchResults(initialKeyword || keyword, "openalex", 1) }}
                 >
                   Try OpenAlex instead
                 </Button>
@@ -455,6 +459,57 @@ export default function SearchPage() {
                   )
                 })}
               </AnimatePresence>
+
+              {/* Pagination */}
+              {papers.length > 0 && total > 0 && (
+                <div className="flex justify-between items-center mt-6 pt-6 border-t border-border/40">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                      fetchResults(initialKeyword || keyword, source, page - 1)
+                    }}
+                    disabled={page <= 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                    <span>Page</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={Math.max(1, Math.ceil(total / 20))}
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const p = parseInt(pageInput, 10)
+                          const maxPages = Math.max(1, Math.ceil(total / 20))
+                          if (!isNaN(p) && p >= 1 && p <= maxPages) {
+                            window.scrollTo({ top: 0, behavior: "smooth" })
+                            fetchResults(initialKeyword || keyword, source, p)
+                          } else {
+                            setPageInput(page.toString())
+                          }
+                        }
+                      }}
+                      onBlur={() => setPageInput(page.toString())}
+                      className="w-16 h-8 text-center px-1 py-1"
+                    />
+                    <span>of {Math.max(1, Math.ceil(total / 20))}</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                      fetchResults(initialKeyword || keyword, source, page + 1)
+                    }}
+                    disabled={page >= Math.ceil(total / 20) || isLoading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </motion.div>
           )}
         </div>
