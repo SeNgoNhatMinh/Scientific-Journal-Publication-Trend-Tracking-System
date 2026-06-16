@@ -253,6 +253,16 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Bio</label>
+                <textarea
+                  value={profileForm.bio}
+                  onChange={e => setProfileForm(f => ({ ...f, bio: e.target.value }))}
+                  placeholder="Tell us a bit about yourself and your research focus..."
+                  className="flex w-full rounded-xl border border-border/50 bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:bg-background/80 disabled:cursor-not-allowed disabled:opacity-50 min-h-[100px] resize-y"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Research Interests</label>
                 <Input
                   value={profileForm.interests}
