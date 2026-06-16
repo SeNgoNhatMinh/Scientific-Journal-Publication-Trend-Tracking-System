@@ -21,6 +21,7 @@ const sourceRoutes = require('./routes/sourceRoutes');
 const corpusRoutes = require('./routes/corpusRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const workspaceRoutes = require('./routes/workspaceRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use(`${apiPrefix}/sources`, sourceRoutes);
 app.use(`${apiPrefix}/corpus`, corpusRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/workspaces`, workspaceRoutes);
+app.use(`${apiPrefix}/users`, userRoutes);
 
 // 404 handler
 app.use((req, res) => {

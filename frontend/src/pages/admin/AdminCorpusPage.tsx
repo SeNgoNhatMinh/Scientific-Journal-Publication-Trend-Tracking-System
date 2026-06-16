@@ -1,126 +1,275 @@
+import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, StopCircle, Trash2, Loader2, AlertCircle } from "lucide-react"
-import { useState, useEffect } from "react"
+import {
+  RefreshCw, StopCircle, Trash2, Loader2, AlertCircle, Database,
+  CheckCircle2, Cpu, FileText, Clock, Search
+} from "lucide-react"
 import api from "@/lib/api"
+
+const statusConfig: Record<string, { label: string; cls: string; dot: string; spinner?: boolean }> = {
+  completed: {
+    label: "Completed",
+    cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+    dot: "bg-emerald-500",
+  },
+  ingesting: {
+    label: "Ingesting",
+    cls: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    dot: "bg-blue-500",
+    spinner: true,
+  },
+  analyzing: {
+    label: "Analyzing",
+    cls: "bg-violet-500/10 text-violet-500 border-violet-500/20",
+    dot: "bg-violet-500",
+    spinner: true,
+  },
+  failed: {
+    label: "Failed",
+    cls: "bg-red-500/10 text-red-500 border-red-500/20",
+    dot: "bg-red-500",
+  },
+  pending: {
+    label: "Pending",
+    cls: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+    dot: "bg-orange-400",
+  },
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = statusConfig[status?.toLowerCase()] ?? {
+    label: status || "Unknown",
+    cls: "bg-muted text-muted-foreground border-border",
+    dot: "bg-muted-foreground",
+  }
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${cfg.cls}`}>
+      {cfg.spinner
+        ? <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+        : <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} animate-pulse`} />}
+      {cfg.label}
+    </span>
+  )
+}
 
 export default function AdminCorpusPage() {
   const [runs, setRuns] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const fetchCorpusRuns = async () => {
+  const fetchRuns = async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await api.get('/corpus/runs')
-      // API might return { success: true, runs: [...] } or just [...]
+      const res = await api.get("/corpus/runs")
       const data = res.data.runs || res.data || []
       setRuns(Array.isArray(data) ? data : [])
     } catch (err: any) {
-      console.error(err)
       setError("Failed to fetch corpus runs. " + (err.response?.data?.message || err.message))
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchCorpusRuns()
-  }, [])
+  useEffect(() => { fetchRuns() }, [])
 
-  const getStatusColor = (status: string) => {
-    if (!status) return 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20'
-    switch (status.toLowerCase()) {
-      case 'completed': return 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
-      case 'ingesting': return 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
-      case 'analyzing': return 'bg-purple-500/10 text-purple-500 hover:bg-purple-500/20'
-      case 'failed': return 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-      default: return 'bg-gray-500/10 text-gray-500 hover:bg-gray-500/20'
-    }
+  const filtered = runs.filter(r =>
+    !search || (r.keyword || r.query || "").toLowerCase().includes(search.toLowerCase())
+  )
+
+  const stats = {
+    total: runs.length,
+    active: runs.filter(r => r.status === "ingesting" || r.status === "analyzing").length,
+    completed: runs.filter(r => r.status === "completed").length,
+    failed: runs.filter(r => r.status === "failed").length,
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Corpus Management</h2>
-          <p className="text-muted-foreground">Monitor background jobs for paper collection and trend analysis.</p>
-        </div>
-        <Button variant="outline" onClick={fetchCorpusRuns} disabled={isLoading} className="w-full sm:w-auto bg-white/60 dark:bg-black/40 backdrop-blur-md">
-          {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Sync All
-        </Button>
+      {/* Summary cards */}
+      <div className="grid gap-4 sm:grid-cols-4">
+        {[
+          { label: "Total Runs", value: stats.total, icon: Database, color: "from-violet-500/20 to-purple-500/10", border: "border-violet-500/20", text: "text-violet-500", iconBg: "from-violet-500 to-purple-600" },
+          { label: "Active", value: stats.active, icon: Cpu, color: "from-blue-500/20 to-cyan-500/10", border: "border-blue-500/20", text: "text-blue-500", iconBg: "from-blue-500 to-cyan-600" },
+          { label: "Completed", value: stats.completed, icon: CheckCircle2, color: "from-emerald-500/20 to-teal-500/10", border: "border-emerald-500/20", text: "text-emerald-500", iconBg: "from-emerald-500 to-teal-600" },
+          { label: "Failed", value: stats.failed, icon: AlertCircle, color: "from-red-500/20 to-rose-500/10", border: "border-red-500/20", text: "text-red-500", iconBg: "from-red-500 to-rose-600" },
+        ].map((s, i) => {
+          const Icon = s.icon
+          return (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07 }}
+              className={`relative overflow-hidden rounded-2xl border ${s.border} bg-gradient-to-br ${s.color} backdrop-blur-md p-5`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className={`h-8 w-8 rounded-lg bg-gradient-to-br ${s.iconBg} flex items-center justify-center shadow-sm`}>
+                  <Icon className="h-4 w-4 text-white" />
+                </div>
+              </div>
+              <p className={`text-2xl font-bold tabular-nums ${s.text}`}>{s.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+            </motion.div>
+          )
+        })}
       </div>
 
-      <div className="rounded-md border border-white/20 dark:border-white/10 bg-white/60 dark:bg-black/40 backdrop-blur-md shadow-sm overflow-hidden min-h-[300px] flex flex-col">
+      {/* Toolbar */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="flex flex-col sm:flex-row sm:items-center gap-3"
+      >
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by keyword..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full h-9 pl-9 pr-4 rounded-xl border border-border/50 bg-background/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary/50 transition-colors"
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchRuns}
+          disabled={isLoading}
+          className="gap-2 h-9 shrink-0 bg-background/50 border-border/50 hover:bg-muted/50"
+        >
+          {isLoading
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <RefreshCw className="h-3.5 w-3.5" />}
+          Refresh
+        </Button>
+      </motion.div>
+
+      {/* Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+        className="rounded-2xl border border-border/40 bg-card/60 backdrop-blur-md overflow-hidden shadow-sm"
+      >
         {error ? (
-          <div className="p-8 flex flex-col items-center justify-center text-center text-muted-foreground h-full flex-1">
-            <AlertCircle className="h-8 w-8 text-destructive mb-3" />
-            <p>{error}</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+              <AlertCircle className="h-6 w-6 text-red-500" />
+            </div>
+            <p className="text-sm text-muted-foreground text-center max-w-xs">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchRuns} className="mt-2">Retry</Button>
           </div>
         ) : isLoading && runs.length === 0 ? (
-          <div className="p-8 flex flex-col items-center justify-center h-full flex-1">
-            <Loader2 className="h-8 w-8 text-primary animate-spin mb-3" />
-            <p className="text-muted-foreground">Loading corpus runs...</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            <p className="text-sm text-muted-foreground">Loading corpus runs...</p>
           </div>
-        ) : runs.length === 0 ? (
-           <div className="p-8 flex flex-col items-center justify-center text-center text-muted-foreground h-full flex-1">
-            <p>No corpus runs found in the database.</p>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-muted/30 flex items-center justify-center">
+              <Database className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {search ? `No results for "${search}"` : "No corpus runs found"}
+            </p>
           </div>
         ) : (
           <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead>Run ID</TableHead>
-                <TableHead>Target Keyword</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Papers Gathered</TableHead>
-                <TableHead>Created By</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+            <TableHeader>
+              <TableRow className="bg-muted/20 hover:bg-muted/20 border-border/30">
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-6">Run ID</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Keyword</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Papers</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Created By</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-6">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {runs.map((run) => (
-                <TableRow key={run._id || run.id} className="hover:bg-muted/30 transition-colors">
-                  <TableCell className="font-mono text-xs text-muted-foreground">{(run._id || run.id)?.substring(0, 8)}...</TableCell>
-                  <TableCell className="font-medium">{run.keyword || run.query || 'Unknown'}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`capitalize border-0 ${getStatusColor(run.status)}`}>
-                      {run.status === 'ingesting' || run.status === 'analyzing' ? (
-                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                      ) : null}
-                      {run.status || 'Unknown'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{(run.stats?.totalPapers || run.papersCount || 0).toLocaleString()}</TableCell>
-                  <TableCell className="text-muted-foreground">{run.user?.name || run.user?.email || run.userId || 'System'}</TableCell>
-                  <TableCell className="text-muted-foreground">{run.createdAt ? new Date(run.createdAt).toLocaleDateString() : 'N/A'}</TableCell>
-                  <TableCell className="text-right">
-                    {run.status === 'ingesting' || run.status === 'analyzing' ? (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-500/10" title="Stop Run">
-                        <StopCircle className="h-4 w-4" />
-                      </Button>
-                    ) : null}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10" title="Delete Corpus">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              <AnimatePresence>
+                {filtered.map((run, idx) => (
+                  <motion.tr
+                    key={run._id || run.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ delay: idx * 0.04 }}
+                    className="border-border/20 hover:bg-muted/20 transition-colors group"
+                  >
+                    <TableCell className="pl-6">
+                      <span className="font-mono text-xs text-muted-foreground bg-muted/40 px-2 py-0.5 rounded-md">
+                        {(run._id || run.id)?.substring(0, 8)}…
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <FileText className="h-3 w-3 text-primary" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">{run.keyword || run.query || "—"}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={run.status} />
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-semibold text-foreground tabular-nums">
+                        {(run.stats?.totalPapers || run.papersCount || 0).toLocaleString()}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">
+                        {run.user?.name || run.user?.email || run.userId || "System"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {run.createdAt ? new Date(run.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {(run.status === "ingesting" || run.status === "analyzing") && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-orange-500 hover:bg-orange-500/10 rounded-lg"
+                            title="Stop Run"
+                          >
+                            <StopCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg"
+                          title="Delete"
+                          disabled={deletingId === (run._id || run.id)}
+                        >
+                          {deletingId === (run._id || run.id)
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
             </TableBody>
           </Table>
         )}
-      </div>
+      </motion.div>
     </div>
   )
 }
