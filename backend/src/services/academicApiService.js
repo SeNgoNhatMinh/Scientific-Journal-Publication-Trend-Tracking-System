@@ -185,38 +185,162 @@ const extractArxivYear = url => {
   return year >= 91 ? 1900 + year : 2000 + year;
 };
 
-const enrichExaPaperWithCrossref = async paper => {
-  if (!paper.title) return paper;
+/** Extract arXiv ID from a URL, e.g. arxiv.org/abs/2301.04567 → "2301.04567" */
+const extractArxivId = url => {
+  const match = String(url || '').match(/arxiv\.org\/(?:abs|html|pdf)\/([0-9]{4}\.[0-9]{4,5}(?:v\d+)?)/i);
+  return match?.[1]?.replace(/v\d+$/, '') || null;
+};
+
+/**
+ * Enrich an Exa result with full metadata (title, authors, DOI, journal…).
+ *
+ * Strategy (4 tầng, dừng ngay khi đã có đủ tác giả):
+ *  1. DOI → Crossref direct lookup  (chính xác nhất)
+ *  2. arXiv ID → Semantic Scholar   (tốt nhất cho preprint arXiv)
+ *  3. Title → Crossref query         (fallback rộng)
+ *  4. Title → OpenAlex query         (fallback cuối cho tác giả)
+ */
+const enrichExaPaper = async paper => {
+  const mergeFields = (base, extra, crossrefAuthors) => ({
+    ...base,
+    title: base.title || extra.title || base.title,
+    doi: base.doi || extra.doi || null,
+    url: firstUrl(base.url, extra.url) || base.url,
+    authors: base.authors?.length
+      ? base.authors
+      : (crossrefAuthors || extra.authors || []),
+    journalName: base.journalName || extra.journalName || null,
+    citationCount: base.citationCount || extra.citationCount || 0,
+    publicationYear: base.publicationYear || extra.publicationYear || null,
+    publishedDate: base.publishedDate || extra.publishedDate || null,
+  });
 
   try {
-    const response = await crossrefClient.get('/works', {
-      params: {
-        query: paper.title,
-        rows: 1,
-        mailto: envConfig.CROSSREF_MAILTO,
-      },
-    });
+    // ── Strategy 1: DOI → Crossref ──────────────────────────────────────
+    if (paper.doi) {
+      try {
+        const resp = await crossrefClient.get(`/works/${encodeURIComponent(paper.doi)}`, {
+          params: { mailto: envConfig.CROSSREF_MAILTO },
+        });
+        const it = resp.data.message;
+        if (it) {
+          const doi = cleanDoi(it.DOI || it.doi) || paper.doi;
+          const crossrefTitle = Array.isArray(it.title) ? it.title[0] : it.title;
+          const enriched = mergeFields(
+            paper,
+            {
+              title: crossrefTitle,
+              doi,
+              url: firstUrl(it.URL, doiUrl(doi)),
+              journalName: it['container-title']?.[0] || it.publisher || null,
+              citationCount: it['is-referenced-by-count'] || 0,
+              publicationYear: crossrefDatePartsToYear(it),
+              publishedDate: crossrefDatePartsToDate(it),
+            },
+            formatCrossrefAuthors(it.author)
+          );
+          // Nếu đã có tác giả → trả về luôn
+          if (enriched.authors?.length) return enriched;
+          // Nếu chưa có tác giả → tiếp tục strategy 2/3/4 nhưng giữ các field đã enrich
+          return enrichPaperAuthorsOnly(enriched);
+        }
+      } catch { /* fall through */ }
+    }
 
-    const item = response.data.message?.items?.[0];
-    if (!item) return paper;
-
-    const crossrefTitle = Array.isArray(item.title) ? item.title[0] : item.title;
-    if (titleSimilarity(paper.title, crossrefTitle) < 0.45) return paper;
-
-    const doi = cleanDoi(item.DOI || item.doi);
-    return {
-      ...paper,
-      doi: doi || paper.doi,
-      url: firstUrl(paper.url, item.URL, doiUrl(doi)) || paper.url,
-      authors: paper.authors?.length ? paper.authors : formatCrossrefAuthors(item.author),
-      journalName: paper.journalName || item['container-title']?.[0] || item.publisher || null,
-      citationCount: paper.citationCount || item['is-referenced-by-count'] || 0,
-      publicationYear: crossrefDatePartsToYear(item) || paper.publicationYear || null,
-      publishedDate: crossrefDatePartsToDate(item) || paper.publishedDate || null,
-    };
+    return enrichPaperAuthorsOnly(paper);
   } catch {
     return paper;
   }
+};
+
+/**
+ * Chỉ bổ sung tác giả (khi đã có các field khác nhưng thiếu authors).
+ * Thử: arXiv → Semantic Scholar, rồi title → Crossref, rồi title → OpenAlex.
+ */
+const enrichPaperAuthorsOnly = async paper => {
+  // ── Strategy 2: arXiv ID → Semantic Scholar ────────────────────────────
+  const arxivId = extractArxivId(paper.url);
+  if (arxivId && envConfig.SEMANTIC_SCHOLAR_API_KEY) {
+    try {
+      const resp = await semanticScholarClient.get(`/paper/arXiv:${arxivId}`, {
+        headers: buildHeaders('semanticscholar'),
+        params: { fields: 'title,authors,year,externalIds,venue,citationCount,abstract' },
+      });
+      const it = resp.data;
+      if (it?.authors?.length) {
+        return {
+          ...paper,
+          title: paper.title || it.title,
+          doi: paper.doi || cleanDoi(it.externalIds?.DOI) || null,
+          authors: it.authors.map(a => ({ authorId: a.authorId, name: a.name })),
+          journalName: paper.journalName || it.venue || null,
+          citationCount: paper.citationCount || it.citationCount || 0,
+          publicationYear: paper.publicationYear || it.year || null,
+          abstract: paper.abstract || it.abstract || null,
+        };
+      }
+    } catch { /* fall through */ }
+  }
+
+  if (!paper.title) return paper;
+
+  // ── Strategy 3: Title → Crossref ───────────────────────────────────────
+  try {
+    const resp = await crossrefClient.get('/works', {
+      params: { query: paper.title, rows: 3, mailto: envConfig.CROSSREF_MAILTO },
+    });
+    const candidates = resp.data.message?.items || [];
+    const it = candidates.find(c => {
+      const t = Array.isArray(c.title) ? c.title[0] : c.title;
+      return titleSimilarity(paper.title, t) >= 0.35;
+    });
+    if (it) {
+      const authors = formatCrossrefAuthors(it.author);
+      if (authors.length) {
+        return {
+          ...paper,
+          doi: paper.doi || cleanDoi(it.DOI || it.doi) || null,
+          url: firstUrl(paper.url, it.URL, doiUrl(it.DOI)) || paper.url,
+          authors,
+          journalName: paper.journalName || it['container-title']?.[0] || it.publisher || null,
+          citationCount: paper.citationCount || it['is-referenced-by-count'] || 0,
+          publicationYear: paper.publicationYear || crossrefDatePartsToYear(it) || null,
+          publishedDate: paper.publishedDate || crossrefDatePartsToDate(it) || null,
+        };
+      }
+    }
+  } catch { /* fall through */ }
+
+  // ── Strategy 4: Title → OpenAlex ───────────────────────────────────────
+  try {
+    const resp = await openAlexClient.get('/works', {
+      params: withOpenAlexParams({ search: paper.title, per_page: 3 }),
+    });
+    const candidates = resp.data.results || [];
+    const it = candidates.find(c => titleSimilarity(paper.title, c.title) >= 0.35);
+    if (it) {
+      const authors = (it.authorships || []).map(a => ({
+        authorId: a.author?.id || null,
+        name: a.author?.display_name || null,
+      })).filter(a => a.name);
+      if (authors.length) {
+        const doi = cleanDoi(it.doi);
+        return {
+          ...paper,
+          doi: paper.doi || doi || null,
+          url: firstUrl(paper.url, it.primary_location?.landing_page_url, doiUrl(doi)) || paper.url,
+          authors,
+          journalName: paper.journalName || it.primary_location?.source?.display_name || null,
+          citationCount: paper.citationCount || it.cited_by_count || 0,
+          publicationYear: paper.publicationYear || it.publication_year || null,
+          publishedDate: paper.publishedDate || it.publication_date || null,
+          abstract: paper.abstract || null,
+        };
+      }
+    }
+  } catch { /* fall through */ }
+
+  return paper;
 };
 
 const isResearchLikeExaResult = paper => {
@@ -383,19 +507,30 @@ const searchPapers = async (source, keyword, options = {}) => {
     const cached = searchCache.get(cacheKey);
     if (cached) return cached;
 
+    // Chỉ lấy bài báo nghiên cứu: journal-article, conference-paper, preprint
+    const typeFilter = 'type:article|proceedings-article|posted-content';
+    const yearFilter = year ? `publication_year:${year},` : '';
+
     const response = await openAlexClient.get('/works', {
       params: withOpenAlexParams({
         search: keyword,
         page,
         per_page: Math.min(limit, 25),
-        ...(year ? { filter: `publication_year:${year}` } : {}),
+        filter: `${yearFilter}${typeFilter}`,
       }),
     });
+
+    const papers = (response.data.results || []).map(paper => normalizePaper('openalex', paper));
+
+    // Enrich papers không có tác giả bằng Crossref/SemanticScholar/OpenAlex
+    const enrichedPapers = await Promise.all(
+      papers.map(paper => (paper.authors?.length ? paper : enrichExaPaper(paper)))
+    );
 
     const result = {
       source: normalizedSource,
       total: response.data.meta?.count || 0,
-      papers: (response.data.results || []).map(paper => normalizePaper('openalex', paper)),
+      papers: enrichedPapers,
     };
     searchCache.set(cacheKey, result);
     return result;
@@ -459,8 +594,12 @@ const searchPapers = async (source, keyword, options = {}) => {
           category: 'research paper',
           numResults: Math.min(limit, 25),
           contents: {
-            text: {
-              maxCharacters: 1200,
+            text: { maxCharacters: 1500 },
+            // highlights giúp extract DOI + tác giả từ đoạn văn liên quan
+            highlights: {
+              numSentences: 3,
+              highlightsPerUrl: 2,
+              query: 'DOI author abstract',
             },
           },
           ...(year
@@ -482,7 +621,9 @@ const searchPapers = async (source, keyword, options = {}) => {
     const normalizedPapers = results
       .filter(isResearchLikeExaResult)
       .map(paper => normalizePaper('exa', paper));
-    const papers = await Promise.all(normalizedPapers.map(enrichExaPaperWithCrossref));
+
+    // Enrich tất cả kết quả Exa với 4-tầng: DOI→Crossref, arXiv→S2, title→Crossref, title→OpenAlex
+    const papers = await Promise.all(normalizedPapers.map(enrichExaPaper));
 
     return {
       source: normalizedSource,
