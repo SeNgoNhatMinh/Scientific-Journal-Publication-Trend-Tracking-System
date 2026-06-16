@@ -1,20 +1,22 @@
-import { Suspense, lazy, useState } from "react"
+import { Suspense, lazy, useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Search, TrendingUp, Sparkles, Network, ArrowRight, BookOpen, Zap, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useNavigate } from "react-router-dom"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
 import Autoplay from "embla-carousel-autoplay"
+import api from "@/lib/api"
 
 const Constellation = lazy(() => import("@/components/3d/Constellation"))
 
-const trendingTopics = [
-  { id: 1, title: "Federated Learning", category: "Machine Learning", growth: "+124%", color: "from-violet-500/20 to-purple-500/10", badge: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
-  { id: 2, title: "Quantum Computing", category: "Physics & CS", growth: "+89%", color: "from-cyan-500/20 to-blue-500/10", badge: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10" },
-  { id: 3, title: "Large Language Models", category: "Artificial Intelligence", growth: "+312%", color: "from-pink-500/20 to-rose-500/10", badge: "text-pink-400 border-pink-500/30 bg-pink-500/10" },
-  { id: 4, title: "CRISPR Cas9", category: "Biotechnology", growth: "+45%", color: "from-emerald-500/20 to-green-500/10", badge: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
-  { id: 5, title: "Solid State Batteries", category: "Materials Science", growth: "+67%", color: "from-orange-500/20 to-amber-500/10", badge: "text-orange-400 border-orange-500/30 bg-orange-500/10" },
-  { id: 6, title: "Neuromorphic Computing", category: "Hardware", growth: "+110%", color: "from-blue-500/20 to-indigo-500/10", badge: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
+// Color palettes for topic cards (cycled)
+const TOPIC_COLORS = [
+  { color: "from-violet-500/20 to-purple-500/10", badge: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
+  { color: "from-cyan-500/20 to-blue-500/10",    badge: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10"       },
+  { color: "from-pink-500/20 to-rose-500/10",    badge: "text-pink-400 border-pink-500/30 bg-pink-500/10"       },
+  { color: "from-emerald-500/20 to-green-500/10",badge: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  { color: "from-orange-500/20 to-amber-500/10", badge: "text-orange-400 border-orange-500/30 bg-orange-500/10" },
+  { color: "from-blue-500/20 to-indigo-500/10",  badge: "text-blue-400 border-blue-500/30 bg-blue-500/10"       },
 ]
 
 const features = [
@@ -61,6 +63,49 @@ const itemVariants = {
 export default function LandingPage() {
   const navigate = useNavigate()
   const [keyword, setKeyword] = useState("")
+  const [trendingTopics, setTrendingTopics] = useState<any[]>([])
+
+  useEffect(() => {
+    // Fetch top trending keywords from DB
+    api.get("/trends/keyword-categories", { params: { limit: 6 } })
+      .then(r => {
+        const kws: any[] = r.data.keywords ?? []
+        if (kws.length > 0) {
+          setTrendingTopics(
+            kws.slice(0, 6).map((kw: any, i: number) => ({
+              id: kw.keywordId ?? kw._id ?? i,
+              title: kw.name,
+              category: kw.category
+                ? kw.category.charAt(0).toUpperCase() + kw.category.slice(1)
+                : "Research",
+              growth: kw.growthRate != null
+                ? `${kw.growthRate > 0 ? "+" : ""}${kw.growthRate.toFixed(0)}%`
+                : `${kw.paperCount ?? 0} papers`,
+              ...TOPIC_COLORS[i % TOPIC_COLORS.length],
+            }))
+          )
+        } else {
+          // Fallback to trending topics from AnalysisRun
+          api.get("/trends/trending", { params: { limit: 6 } })
+            .then(r2 => {
+              const topics: any[] = r2.data.topics ?? r2.data.trending ?? []
+              setTrendingTopics(
+                topics.slice(0, 6).map((t: any, i: number) => ({
+                  id: t._id ?? i,
+                  title: t.name ?? t.seedKeyword ?? t.keyword ?? "Topic",
+                  category: t.category ?? "Research",
+                  growth: t.growthRate != null
+                    ? `${t.growthRate > 0 ? "+" : ""}${t.growthRate.toFixed(0)}%`
+                    : t.trendStatus ?? "Trending",
+                  ...TOPIC_COLORS[i % TOPIC_COLORS.length],
+                }))
+              )
+            })
+            .catch(() => {})
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
