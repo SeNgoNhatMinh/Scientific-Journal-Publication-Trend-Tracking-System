@@ -125,4 +125,25 @@ router.get('/journal', sourceController.getJournalInfo);
  */
 router.get('/author', sourceController.getAuthorInfo);
 
+/**
+ * @swagger
+ * /sources/suggest:
+ *   get:
+ *     tags:
+ *       - Sources
+ *     security: []
+ *     summary: Gợi ý 5 từ khóa nghiên cứu liên quan (Gemini AI)
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Từ khóa người dùng đã tìm kiếm
+ *     responses:
+ *       200:
+ *         description: Danh sách 5 từ khóa gợi ý
+ */
+router.get('/suggest', sourceController.suggestKeywords);
+
 module.exports = router;
