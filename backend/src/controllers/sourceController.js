@@ -1,4 +1,5 @@
 const academicApiService = require('../services/academicApiService');
+const { suggestResearchKeywords } = require('../services/geminiService');
 
 const searchPapers = async (req, res, next) => {
   try {
@@ -92,9 +93,28 @@ const getAuthorInfo = async (req, res, next) => {
   }
 };
 
+const suggestKeywords = async (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) {
+    return res.status(400).json({ success: false, message: 'keyword is required' });
+  }
+  try {
+    const suggestions = await suggestResearchKeywords(keyword);
+    return res.status(200).json({ success: true, keyword, suggestions });
+  } catch (error) {
+    console.error('[suggest] Gemini error:', error.message);
+    return res.status(503).json({
+      success: false,
+      message: error.message || 'Could not generate suggestions',
+      suggestions: [],
+    });
+  }
+};
+
 module.exports = {
   searchPapers,
   getTrendData,
   getJournalInfo,
   getAuthorInfo,
+  suggestKeywords,
 };

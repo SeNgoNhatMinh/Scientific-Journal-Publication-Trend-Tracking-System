@@ -39,6 +39,7 @@ const envConfig = {
   IEEE_API_KEY: process.env.IEEE_API_KEY || '',
   EXA_API_URL: process.env.EXA_API_URL || 'https://api.exa.ai',
   EXA_API_KEY: process.env.EXA_API_KEY || '',
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
   AI_SERVICE_URL: sanitizeEnv(process.env.AI_SERVICE_URL) || 'http://localhost:8000',
 
   // CORS (nhiều origin cách nhau bởi dấu phẩy)
