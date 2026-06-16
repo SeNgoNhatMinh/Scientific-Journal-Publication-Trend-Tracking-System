@@ -54,19 +54,19 @@ export default function WorkspacesPage() {
     e.preventDefault()
     if (!newWorkspaceName) return
     setIsDialogOpen(false)
+    setIsLoading(true) // Show shimmer while refetching
     try {
-      const res = await api.post("/workspaces", { name: newWorkspaceName, description: newWorkspaceDesc })
-      if (res.data.workspace) {
-        setWorkspaces([...workspaces, res.data.workspace])
-      } else {
-        const listRes = await api.get("/workspaces")
-        setWorkspaces(listRes.data.workspaces || [])
-      }
+      await api.post("/workspaces", { name: newWorkspaceName, description: newWorkspaceDesc })
+      // Re-fetch to ensure data consistency and stats are properly populated
+      const listRes = await api.get("/workspaces")
+      setWorkspaces(listRes.data.workspaces || [])
     } catch (err: any) {
       console.error("Failed to create workspace", err)
+    } finally {
+      setIsLoading(false)
+      setNewWorkspaceName("")
+      setNewWorkspaceDesc("")
     }
-    setNewWorkspaceName("")
-    setNewWorkspaceDesc("")
   }
 
   return (
