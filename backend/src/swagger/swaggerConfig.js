@@ -99,7 +99,8 @@ const path = require('path');
 
 const options = {
   definition: swaggerDefinition,
-  apis: [path.join(__dirname, '..', 'routes', '*.js')],
+  // Dùng forward slash để glob hoạt động trên cả Windows (backslash sẽ làm glob không match được file)
+  apis: [path.join(__dirname, '..', 'routes', '*.js').split(path.sep).join('/')],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
