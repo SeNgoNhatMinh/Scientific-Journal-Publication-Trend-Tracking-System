@@ -112,13 +112,33 @@ function AreaChart({ data, theme }: { data: { year: number; count: number }[]; t
         ))}
       </Svg>
 
-      {/* Year Labels row */}
-      <View style={styles.chartLabels}>
-        {data.map((d, idx) => (
-          <Text key={idx} style={[styles.chartLabelText, { color: theme.muted }]}>
-            {d.year}
-          </Text>
-        ))}
+      {/* Year Labels - absolutely positioned to match data points */}
+      <View style={{ position: 'relative', height: 16, width: chartWidth, marginTop: 4 }}>
+        {(() => {
+          const step = points.length > 12 ? 4 : points.length > 8 ? 3 : points.length > 5 ? 2 : 1;
+          return points.map((p, idx) => {
+            const isLast = idx === points.length - 1;
+            if (idx % step !== 0 && !isLast) return null;
+            return (
+              <Text
+                key={idx}
+                style={[
+                  styles.chartLabelText,
+                  {
+                    color: theme.muted,
+                    position: 'absolute',
+                    left: p.x - 14,
+                    top: 0,
+                    width: 28,
+                    textAlign: 'center',
+                  },
+                ]}
+              >
+                {p.year}
+              </Text>
+            );
+          });
+        })()}
       </View>
     </View>
   );
@@ -277,7 +297,7 @@ export default function TrendsScreen() {
             {/* AI Explain section */}
             <View style={[styles.aiSection, { borderColor: theme.border }]}>
               <View style={styles.aiHeader}>
-                <View>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={[styles.aiTitle, { color: theme.text }]}>AI Research Directions</Text>
                   <Text style={[styles.aiSubtitle, { color: theme.muted }]}>Generate research suggestions from this trend.</Text>
                 </View>
@@ -524,15 +544,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 10,
   },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: width - 72,
-    paddingHorizontal: 12,
-    marginTop: 6,
-  },
   chartLabelText: {
-    fontSize: 10,
+    fontSize: 9,
   },
   aiSection: {
     marginTop: 20,
