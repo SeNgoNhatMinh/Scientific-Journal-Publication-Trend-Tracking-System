@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Brain,
   Search,
@@ -143,6 +144,7 @@ export default function InsightsScreen() {
   const searchParams = useLocalSearchParams();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [keyword, setKeyword] = useState('mamba');
   const [searchedKeyword, setSearchedKeyword] = useState('');
@@ -309,7 +311,7 @@ export default function InsightsScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={styles.titleRow}>
           <Brain size={24} color={theme.primary} />
           <Text style={[styles.title, { color: theme.text }]}>Research Opportunity Finder</Text>
@@ -548,7 +550,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 16,
   },
   titleRow: {

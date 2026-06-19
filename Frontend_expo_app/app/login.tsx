@@ -12,6 +12,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BookOpen, Mail, Lock, User, Eye, EyeOff, Building, ArrowLeft } from 'lucide-react-native';
 import api from '../lib/api';
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -82,7 +84,16 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: theme.background }]}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        contentContainerStyle={[
+          styles.scrollContent, 
+          { 
+            paddingTop: Math.max(insets.top + 10, 30), 
+            paddingBottom: Math.max(insets.bottom + 20, 40) 
+          }
+        ]} 
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Back to Home Button */}
         <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.backButton}>
           <ArrowLeft size={18} color={theme.text} />
@@ -245,8 +256,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
-    paddingBottom: 40,
     alignItems: 'stretch',
   },
   brandContainer: {
