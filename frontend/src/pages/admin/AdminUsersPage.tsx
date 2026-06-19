@@ -272,7 +272,7 @@ export default function AdminUsersPage() {
                             value={user.role}
                             disabled={actionLoading === user._id + "-role"}
                             onChange={e => handleChangeRole(user._id, e.target.value)}
-                            className={`text-[11px] font-semibold pl-2 pr-6 py-1 rounded-full border appearance-none cursor-pointer focus:outline-none bg-transparent ${rCfg.cls}`}
+                            className={`capitalize text-[11px] font-semibold pl-2 pr-6 py-1 rounded-full border appearance-none cursor-pointer focus:outline-none bg-transparent ${rCfg.cls}`}
                           >
                             {ROLE_OPTIONS.map(r => (
                               <option key={r} value={r} className="bg-background text-foreground">

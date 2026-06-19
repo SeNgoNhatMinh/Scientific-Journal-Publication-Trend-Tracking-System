@@ -158,7 +158,7 @@ export default function AuthPage() {
 
                 <div className="relative">
                   <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger className="h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50">
+                    <SelectTrigger className="capitalize h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50">
                       <SelectValue placeholder="Select your role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -218,6 +218,17 @@ export default function AuthPage() {
                 )}
               </button>
             </div>
+
+            {isLogin && (
+              <div className="flex justify-end mt-1 mb-4">
+                <Link 
+                  to="/forgot-password" 
+                  className="text-xs text-primary hover:underline transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             <Button
               type="submit"

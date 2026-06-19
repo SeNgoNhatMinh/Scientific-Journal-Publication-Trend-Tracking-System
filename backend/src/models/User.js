@@ -54,6 +54,8 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     lastLogin: { type: Date, default: null },
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
     bookmarks: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Paper',
