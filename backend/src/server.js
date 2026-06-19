@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 
 const connectDB = require('./config/database');
+const { getDBStatus } = require('./config/database');
 const envConfig = require('./config/env');
 const swaggerSpec = require('./swagger/swaggerConfig');
 const errorHandler = require('./middlewares/errorHandler');
@@ -63,10 +64,16 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *         description: API is healthy
  */
 app.get('/health', (req, res) => {
+  const db = getDBStatus();
+  const dbStateLabel = ['disconnected', 'connected', 'connecting', 'disconnecting'][db.readyState] || 'unknown';
   res.json({
     success: true,
     message: 'API is running',
     timestamp: new Date(),
+    database: {
+      status: dbStateLabel,
+      connected: db.isConnected,
+    },
   });
 });
 
