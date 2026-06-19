@@ -14,6 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Search,
@@ -46,6 +47,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [keyword, setKeyword] = useState('');
   const [trendingTopics, setTrendingTopics] = useState<any[]>([]);
@@ -159,7 +161,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header Bar */}
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={styles.logoContainer}>
           <BookOpen size={24} color={theme.primary} />
           <Text style={[styles.logoText, { color: theme.text }]}>SciTrend</Text>
@@ -439,7 +441,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 12,
   },
   logoContainer: {

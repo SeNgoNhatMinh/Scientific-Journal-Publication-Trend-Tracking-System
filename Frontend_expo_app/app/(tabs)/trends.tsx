@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp,
   Activity,
@@ -147,6 +148,7 @@ function AreaChart({ data, theme }: { data: { year: number; count: number }[]; t
 export default function TrendsScreen() {
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [keyword, setKeyword] = useState('');
   const [trendData, setTrendData] = useState<any>(null);
@@ -219,7 +221,7 @@ export default function TrendsScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={styles.titleRow}>
           <TrendingUp size={24} color={theme.primary} />
           <Text style={[styles.title, { color: theme.text }]}>Research Trends</Text>
@@ -414,7 +416,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 16,
   },
   titleRow: {

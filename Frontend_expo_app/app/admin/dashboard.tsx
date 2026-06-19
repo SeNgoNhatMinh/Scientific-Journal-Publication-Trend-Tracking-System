@@ -8,14 +8,17 @@ import {
   ActivityIndicator,
   useColorScheme,
   Dimensions,
+  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Users,
   Database,
   FileText,
   Activity,
   ArrowRight,
+  ArrowLeft,
   Server,
   Shield,
   Bell,
@@ -28,6 +31,7 @@ export default function AdminDashboardScreen() {
   const router = useRouter();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [stats, setStats] = useState({ users: 0, corpus: 0, papers: 0, activeCorpus: 0 });
   const [apiHealth, setApiHealth] = useState<'ok' | 'error' | 'loading'>('loading');
@@ -88,13 +92,35 @@ export default function AdminDashboardScreen() {
   }, []);
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.scrollContent}>
-      {/* Header Info */}
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Shield size={24} color={theme.destructive} />
-          <Text style={[styles.title, { color: theme.text }]}>Admin Panel</Text>
-        </View>
+    <>
+      <Stack.Screen 
+        options={{
+          headerLeft: ({ tintColor }) => (
+            <TouchableOpacity 
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)');
+                }
+              }}
+              style={{ marginRight: 16, marginLeft: 8 }}
+            >
+              <ArrowLeft size={24} color={tintColor || theme.text} />
+            </TouchableOpacity>
+          )
+        }} 
+      />
+      <ScrollView 
+        style={[styles.container, { backgroundColor: theme.background }]} 
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}
+      >
+        {/* Header Info */}
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <Shield size={24} color={theme.destructive} />
+            <Text style={[styles.title, { color: theme.text }]}>Admin Panel</Text>
+          </View>
         <Text style={[styles.subtitle, { color: theme.muted }]}>
           Monitor system metrics, manage database parameters, and analyze corpus jobs.
         </Text>
@@ -194,7 +220,8 @@ export default function AdminDashboardScreen() {
           </View>
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
