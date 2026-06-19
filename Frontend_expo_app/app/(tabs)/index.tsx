@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ScrollView,
   useColorScheme,
   FlatList,
   Dimensions,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +26,8 @@ import {
   LogOut,
   User as UserIcon,
   ShieldAlert,
+  Library,
+  LayoutGrid,
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
@@ -49,6 +53,9 @@ export default function HomeScreen() {
   const [trendingTopics, setTrendingTopics] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [avatarLayout, setAvatarLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const avatarRef = useRef<any>(null);
 
   // Load user details
   const checkUserStatus = async () => {
@@ -125,11 +132,23 @@ export default function HomeScreen() {
   };
 
   const handleLogout = async () => {
+    setMenuVisible(false);
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');
     setIsLoggedIn(false);
     setUser(null);
     router.replace('/login');
+  };
+
+  const openMenu = () => {
+    if (avatarRef.current) {
+      avatarRef.current.measureInWindow((x: number, y: number, w: number, h: number) => {
+        setAvatarLayout({ x, y, width: w, height: h });
+        setMenuVisible(true);
+      });
+    } else {
+      setMenuVisible(true);
+    }
   };
 
   const quickSearch = (kw: string) => {
@@ -161,11 +180,79 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                onPress={() => router.push('/profile')}
+                ref={avatarRef}
+                onPress={openMenu}
                 style={[styles.avatarButton, { backgroundColor: theme.primary + '15' }]}
               >
                 <UserIcon size={16} color={theme.primary} />
               </TouchableOpacity>
+
+              {/* Dropdown Menu */}
+              <Modal
+                transparent
+                visible={menuVisible}
+                animationType="fade"
+                onRequestClose={() => setMenuVisible(false)}
+              >
+                <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
+                  <View style={styles.menuOverlay}>
+                    <TouchableWithoutFeedback>
+                      <View
+                        style={[
+                          styles.menuContainer,
+                          {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                            top: avatarLayout.y + avatarLayout.height + 8,
+                            right: 20,
+                          },
+                        ]}
+                      >
+                        {/* Label */}
+                        <Text style={[styles.menuLabel, { color: theme.muted }]}>MY ACCOUNT</Text>
+
+                        {/* Profile */}
+                        <TouchableOpacity
+                          onPress={() => { setMenuVisible(false); router.push('/profile'); }}
+                          style={styles.menuItem}
+                        >
+                          <UserIcon size={18} color={theme.text} />
+                          <Text style={[styles.menuItemText, { color: theme.text }]}>Profile</Text>
+                        </TouchableOpacity>
+
+                        {/* Library */}
+                        <TouchableOpacity
+                          onPress={() => { setMenuVisible(false); router.push({ pathname: '/(tabs)/library', params: { tab: 'bookmarks' } }); }}
+                          style={[styles.menuItem, { backgroundColor: theme.primary + '12', borderRadius: 10 }]}
+                        >
+                          <Library size={18} color={theme.text} />
+                          <Text style={[styles.menuItemText, { color: theme.text }]}>Library</Text>
+                        </TouchableOpacity>
+
+                        {/* Workspaces */}
+                        <TouchableOpacity
+                          onPress={() => { setMenuVisible(false); router.push({ pathname: '/(tabs)/library', params: { tab: 'workspaces' } }); }}
+                          style={styles.menuItem}
+                        >
+                          <LayoutGrid size={18} color={theme.text} />
+                          <Text style={[styles.menuItemText, { color: theme.text }]}>Workspaces</Text>
+                        </TouchableOpacity>
+
+                        {/* Divider */}
+                        <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+
+                        {/* Log out */}
+                        <TouchableOpacity
+                          onPress={handleLogout}
+                          style={styles.menuItem}
+                        >
+                          <Text style={[styles.menuLogoutText]}>Log out</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableWithoutFeedback>
+                  </View>
+                </TouchableWithoutFeedback>
+              </Modal>
             </>
           ) : (
             <TouchableOpacity
@@ -398,6 +485,53 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  // Dropdown Menu
+  menuOverlay: {
+    flex: 1,
+  },
+  menuContainer: {
+    position: 'absolute',
+    minWidth: 180,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  menuLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  menuItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  menuDivider: {
+    height: 1,
+    marginHorizontal: 4,
+    marginVertical: 4,
+  },
+  menuLogoutText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ef4444',
+    paddingLeft: 2,
   },
   heroSection: {
     alignItems: 'center',

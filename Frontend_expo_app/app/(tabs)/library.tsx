@@ -10,9 +10,8 @@ import {
   useColorScheme,
   FlatList,
   Modal,
-  Platform,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -44,9 +43,19 @@ export default function LibraryScreen() {
   const theme = Colors[systemScheme || 'dark'];
   const insets = useSafeAreaInsets();
 
-  const [activeSegment, setActiveSegment] = useState<'bookmarks' | 'workspaces'>('bookmarks');
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+
+  const [activeSegment, setActiveSegment] = useState<'bookmarks' | 'workspaces'>(
+    tab === 'workspaces' ? 'workspaces' : 'bookmarks'
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sync segment when arriving with tab param
+  useEffect(() => {
+    if (tab === 'workspaces') setActiveSegment('workspaces');
+    else if (tab === 'bookmarks') setActiveSegment('bookmarks');
+  }, [tab]);
 
   // Bookmarks State
   const [bookmarks, setBookmarks] = useState<any[]>([]);
