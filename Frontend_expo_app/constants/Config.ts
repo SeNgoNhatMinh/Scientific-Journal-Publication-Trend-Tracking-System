@@ -19,7 +19,5 @@ const getLocalApiUrl = () => {
 export const LOCAL_API_URL = getLocalApiUrl();
 
 // Set the active API endpoint
-// You can toggle between LOCAL_API_URL and PRODUCTION_API_URL here.
-// Defaulting to PRODUCTION_API_URL so it works instantly on physical devices and emulators
-// without requiring a running local backend server.
-export const API_BASE_URL = PRODUCTION_API_URL;
+// Automatically toggles between LOCAL_API_URL in development and PRODUCTION_API_URL in production.
+export const API_BASE_URL = __DEV__ ? LOCAL_API_URL : PRODUCTION_API_URL;
