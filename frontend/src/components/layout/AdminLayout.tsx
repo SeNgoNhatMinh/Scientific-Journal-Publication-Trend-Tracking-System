@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom"
-import { LayoutDashboard, Users, Database, Activity, LogOut, Menu, X, Shield, ChevronRight, ArrowLeft } from "lucide-react"
+import { LayoutDashboard, Users, Database, Activity, LogOut, Menu, X, Shield, ChevronRight, ArrowLeft, BookOpen, Tag, Compass } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -8,6 +8,10 @@ const navItems = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard, color: "from-violet-500 to-purple-600" },
   { name: "Users", href: "/admin/users", icon: Users, color: "from-blue-500 to-cyan-600" },
   { name: "Corpus & Trends", href: "/admin/corpus", icon: Database, color: "from-emerald-500 to-teal-600" },
+  { name: "Authors", href: "/admin/authors", icon: Users, color: "from-violet-500 to-indigo-600" },
+  { name: "Journals", href: "/admin/journals", icon: BookOpen, color: "from-emerald-500 to-green-600" },
+  { name: "Keywords", href: "/admin/keywords", icon: Tag, color: "from-purple-500 to-pink-600" },
+  { name: "Topics", href: "/admin/topics", icon: Compass, color: "from-blue-500 to-sky-600" },
   { name: "System Monitor", href: "/admin/monitoring", icon: Activity, color: "from-orange-500 to-rose-500" },
 ]
 
@@ -16,6 +20,10 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   "/admin/users": { title: "User Management", subtitle: "Manage users, roles and access" },
   "/admin/corpus": { title: "Corpus & Trends", subtitle: "Monitor background jobs and analysis runs" },
   "/admin/monitoring": { title: "System Monitor", subtitle: "Track API limits and service health" },
+  "/admin/authors": { title: "Author Management", subtitle: "Manage academic authors and works statistics" },
+  "/admin/journals": { title: "Journal Management", subtitle: "Manage scientific publication venues and metrics" },
+  "/admin/keywords": { title: "Keyword Management", subtitle: "Manage terminology and categorization mappings" },
+  "/admin/topics": { title: "Topic Management", subtitle: "Manage research topic clusters and growth trends" },
 }
 
 export default function AdminLayout() {

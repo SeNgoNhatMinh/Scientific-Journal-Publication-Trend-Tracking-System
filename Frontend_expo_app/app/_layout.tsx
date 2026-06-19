@@ -21,6 +21,10 @@ export default function RootLayout() {
         <Stack.Screen name="admin/dashboard" options={{ title: 'Admin Dashboard', headerBackTitle: 'Back' }} />
         <Stack.Screen name="admin/users" options={{ title: 'Manage Users', headerBackTitle: 'Back' }} />
         <Stack.Screen name="admin/monitoring" options={{ title: 'System Monitoring', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="admin/authors" options={{ title: 'Manage Authors', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="admin/journals" options={{ title: 'Manage Journals', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="admin/keywords" options={{ title: 'Manage Keywords', headerBackTitle: 'Back' }} />
+        <Stack.Screen name="admin/topics" options={{ title: 'Manage Topics', headerBackTitle: 'Back' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

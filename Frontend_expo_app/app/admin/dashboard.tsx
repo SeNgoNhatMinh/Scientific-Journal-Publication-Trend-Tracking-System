@@ -23,6 +23,9 @@ import {
   Shield,
   Bell,
   Settings,
+  BookOpen,
+  Tag,
+  Compass,
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
@@ -33,7 +36,7 @@ export default function AdminDashboardScreen() {
   const theme = Colors[systemScheme || 'dark'];
   const insets = useSafeAreaInsets();
 
-  const [stats, setStats] = useState({ users: 0, corpus: 0, papers: 0, activeCorpus: 0 });
+  const [stats, setStats] = useState({ users: 0, corpus: 0, papers: 0, activeCorpus: 0, authors: 0, journals: 0, keywords: 0, topics: 0 });
   const [apiHealth, setApiHealth] = useState<'ok' | 'error' | 'loading'>('loading');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -57,11 +60,41 @@ export default function AdminDashboardScreen() {
         ? runs.reduce((sum: number, r: any) => sum + (r.stats?.totalPapers ?? 0), 0)
         : 0;
 
+      // Additional counts
+      let authorsCount = 0;
+      let journalsCount = 0;
+      let keywordsCount = 0;
+      let topicsCount = 0;
+
+      try {
+        const authorsRes = await api.get('/authors', { params: { limit: 1 } });
+        authorsCount = authorsRes.data.total ?? 0;
+      } catch (e) {}
+
+      try {
+        const journalsRes = await api.get('/journals', { params: { limit: 1 } });
+        journalsCount = journalsRes.data.total ?? 0;
+      } catch (e) {}
+
+      try {
+        const keywordsRes = await api.get('/keywords', { params: { limit: 1 } });
+        keywordsCount = keywordsRes.data.total ?? 0;
+      } catch (e) {}
+
+      try {
+        const topicsRes = await api.get('/topics', { params: { limit: 1 } });
+        topicsCount = topicsRes.data.total ?? 0;
+      } catch (e) {}
+
       setStats({
         users: totalUsers,
         corpus: Array.isArray(runs) ? runs.length : 0,
         papers: totalPapers,
         activeCorpus: activeJobs,
+        authors: authorsCount,
+        journals: journalsCount,
+        keywords: keywordsCount,
+        topics: topicsCount,
       });
 
       // 3. Health check
@@ -137,6 +170,10 @@ export default function AdminDashboardScreen() {
               { label: 'Corpus Runs', value: stats.corpus, icon: Database, color: '#10b981' },
               { label: 'Total Papers', value: stats.papers, icon: FileText, color: '#3b82f6' },
               { label: 'Active Jobs', value: stats.activeCorpus, icon: Activity, color: '#f97316' },
+              { label: 'Total Authors', value: stats.authors, icon: Users, color: '#6366f1' },
+              { label: 'Total Journals', value: stats.journals, icon: BookOpen, color: '#10b981' },
+              { label: 'Total Keywords', value: stats.keywords, icon: Tag, color: '#ec4899' },
+              { label: 'Total Topics', value: stats.topics, icon: Compass, color: '#06b6d4' },
             ].map((stat) => (
               <View key={stat.label} style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <View style={[styles.statIconBg, { backgroundColor: stat.color + '15' }]}>
@@ -157,6 +194,50 @@ export default function AdminDashboardScreen() {
               <View style={styles.navCardLeft}>
                 <Users size={20} color={theme.primary} />
                 <Text style={[styles.navCardTitle, { color: theme.text }]}>User Management</Text>
+              </View>
+              <ArrowRight size={18} color={theme.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/admin/authors' as any)}
+              style={[styles.navCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <View style={styles.navCardLeft}>
+                <Users size={20} color={theme.primary} />
+                <Text style={[styles.navCardTitle, { color: theme.text }]}>Author Management</Text>
+              </View>
+              <ArrowRight size={18} color={theme.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/admin/journals' as any)}
+              style={[styles.navCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <View style={styles.navCardLeft}>
+                <BookOpen size={20} color={theme.primary} />
+                <Text style={[styles.navCardTitle, { color: theme.text }]}>Journal Management</Text>
+              </View>
+              <ArrowRight size={18} color={theme.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/admin/keywords' as any)}
+              style={[styles.navCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <View style={styles.navCardLeft}>
+                <Tag size={20} color={theme.primary} />
+                <Text style={[styles.navCardTitle, { color: theme.text }]}>Keyword Management</Text>
+              </View>
+              <ArrowRight size={18} color={theme.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push('/admin/topics' as any)}
+              style={[styles.navCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <View style={styles.navCardLeft}>
+                <Compass size={20} color={theme.primary} />
+                <Text style={[styles.navCardTitle, { color: theme.text }]}>Topic Management</Text>
               </View>
               <ArrowRight size={18} color={theme.primary} />
             </TouchableOpacity>
