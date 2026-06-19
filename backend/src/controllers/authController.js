@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const envConfig = require('../config/env');
+const { sendPasswordResetEmail } = require('../services/emailService');
 
 /**
  * Authentication Controller
@@ -223,10 +225,130 @@ const updatePassword = async (req, res, next) => {
   }
 };
 
+// Forgot Password — generates reset token and sends email
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .select('+passwordResetToken +passwordResetExpires');
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: 'If an account exists with that email, a reset link has been sent.',
+      });
+    }
+
+    // Generate a secure random token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save({ validateBeforeSave: false });
+
+    // Build reset URL pointing to frontend
+    const clientUrl = envConfig.CLIENT_URL || 'http://localhost:5173';
+    const resetUrl = `${clientUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+
+    try {
+      await sendPasswordResetEmail(email, resetUrl, user.name);
+    } catch (emailErr) {
+      // Rollback token if email fails
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      console.error('[forgotPassword] Email send failed:', emailErr.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send reset email. Please check your email configuration.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'If an account exists with that email, a reset link has been sent.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Reset Password — verify token and set new password
+const resetPassword = async (req, res, next) => {
+  try {
+    const { token, email, newPassword } = req.body;
+
+    if (!token || !email || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token, email, and new password are required',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters',
+      });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .select('+password +passwordResetToken +passwordResetExpires');
+
+    if (
+      !user ||
+      user.passwordResetToken !== hashedToken ||
+      !user.passwordResetExpires ||
+      user.passwordResetExpires < new Date()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token. Please request a new one.',
+      });
+    }
+
+    user.password = newPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    // Auto-login after reset
+    const jwtToken = jwt.sign(
+      { id: user._id, email: user.email, role: user.role },
+      envConfig.JWT_SECRET,
+      { expiresIn: envConfig.JWT_EXPIRE }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You are now logged in.',
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
   getCurrentUser,
   updateProfile,
   updatePassword,
+  forgotPassword,
+  resetPassword,
 };

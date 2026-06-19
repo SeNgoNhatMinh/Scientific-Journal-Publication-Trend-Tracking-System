@@ -7,6 +7,8 @@ import PaperPage from "./pages/PaperPage"
 import TrendsPage from "./pages/TrendsPage"
 import InsightsPage from "./pages/InsightsPage"
 import AuthPage from "./pages/AuthPage"
+import ForgotPasswordPage from "./pages/ForgotPasswordPage"
+import ResetPasswordPage from "./pages/ResetPasswordPage"
 import CorpusPage from "./pages/CorpusPage"
 import LibraryPage from "./pages/LibraryPage"
 import WorkspacesPage from "./pages/WorkspacesPage"
@@ -33,6 +35,8 @@ function App() {
           <Route path="papers/:id" element={<PaperPage />} />
           <Route path="login" element={<AuthPage />} />
           <Route path="register" element={<AuthPage />} />
+          <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="reset-password" element={<ResetPasswordPage />} />
           
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>
