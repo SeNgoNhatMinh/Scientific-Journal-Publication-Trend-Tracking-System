@@ -3,10 +3,12 @@ import React from 'react';
 import { useColorScheme, Platform } from 'react-native';
 import { Home, Search, TrendingUp, Brain, Library } from 'lucide-react-native';
 import { Colors, Fonts } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -22,8 +24,8 @@ export default function TabLayout() {
           shadowOpacity: colorScheme === 'dark' ? 0.25 : 0.08,
           shadowOffset: { width: 0, height: -3 },
           shadowRadius: 8,
-          height: Platform.OS === 'ios' ? 88 : 66,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -32,7 +34,7 @@ export default function TabLayout() {
           fontFamily: Fonts.sans,
         },
         tabBarIconStyle: {
-          marginBottom: Platform.OS === 'ios' ? 0 : 2,
+          marginBottom: 2,
         },
         headerShown: false,
       }}

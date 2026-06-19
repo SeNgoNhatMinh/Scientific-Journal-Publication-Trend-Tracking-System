@@ -8,9 +8,9 @@ import {
   ScrollView,
   ActivityIndicator,
   useColorScheme,
-  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User as UserIcon,
@@ -31,6 +31,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -163,7 +164,10 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.scrollContent}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.background }]} 
+      contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top + 10, 20) }]}
+    >
       {/* Back Header */}
       <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
         <ArrowLeft size={20} color={theme.text} />
@@ -355,7 +359,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 60,
   },
   backButton: {
