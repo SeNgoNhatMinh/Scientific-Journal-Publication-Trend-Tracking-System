@@ -22,7 +22,6 @@ import {
   Save,
   Building,
   CheckCircle,
-  ArrowLeft,
 } from 'lucide-react-native';
 import api from '../lib/api';
 import { Colors } from '../constants/theme';
@@ -164,15 +163,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: theme.background }]} 
-      contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top + 10, 20) }]}
-    >
-      {/* Back Header */}
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <ArrowLeft size={20} color={theme.text} />
-        <Text style={[styles.backText, { color: theme.text }]}>Back</Text>
-      </TouchableOpacity>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 20) }]}>
 
       {/* Decorative Banner */}
       <View style={[styles.banner, { backgroundColor: theme.primary + '15' }]}>
@@ -360,16 +351,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 60,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 20,
-  },
-  backText: {
-    fontSize: 15,
-    fontWeight: '600',
   },
   centerContainer: {
     flex: 1,

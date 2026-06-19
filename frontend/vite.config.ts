@@ -7,7 +7,7 @@ const RAILWAY_URL = 'https://scientific-journal-publication-trend-tracking-sy-pr
 const LOCAL_BACKEND = 'http://localhost:5000';
 
 // Đổi USE_LOCAL = true để dùng backend localhost, false để dùng Railway production
-const USE_LOCAL = true;
+const USE_LOCAL = false;
 const BACKEND_TARGET = USE_LOCAL ? LOCAL_BACKEND : RAILWAY_URL;
 
 // https://vite.dev/config/
