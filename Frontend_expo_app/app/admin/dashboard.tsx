@@ -104,7 +104,7 @@ export default function AdminDashboardScreen() {
                   router.replace('/(tabs)');
                 }
               }}
-              style={{ marginRight: Platform.OS === 'ios' ? 16 : 24, marginLeft: Platform.OS === 'ios' ? 8 : 0 }}
+              style={{ marginRight: 16, marginLeft: 8 }}
             >
               <ArrowLeft size={24} color={tintColor || theme.text} />
             </TouchableOpacity>

@@ -34,7 +34,7 @@ export default function TabLayout() {
           fontFamily: Fonts.sans,
         },
         tabBarIconStyle: {
-          marginBottom: Platform.OS === 'ios' ? 0 : 2,
+          marginBottom: 2,
         },
         headerShown: false,
       }}
