@@ -39,6 +39,7 @@ const envConfig = {
   IEEE_API_KEY: process.env.IEEE_API_KEY || '',
   EXA_API_URL: process.env.EXA_API_URL || 'https://api.exa.ai',
   EXA_API_KEY: process.env.EXA_API_KEY || '',
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
   AI_SERVICE_URL: sanitizeEnv(process.env.AI_SERVICE_URL) || 'http://localhost:8000',
 
   // CORS (nhiều origin cách nhau bởi dấu phẩy)
@@ -54,6 +55,18 @@ const envConfig = {
   // Validation
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
+
+  // Email (Forgot Password)
+  EMAIL_FROM: process.env.EMAIL_FROM || '',
+  EMAIL_PASS: process.env.EMAIL_PASS || '',
+  SMTP_HOST: process.env.SMTP_HOST || '',
+  SMTP_PORT: process.env.SMTP_PORT || '587',
+  SMTP_SECURE: process.env.SMTP_SECURE || 'false',
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
+
+  // Frontend client URL (for building reset links)
+  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
 };
 
 // Validate required environment variables

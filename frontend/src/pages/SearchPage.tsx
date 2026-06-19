@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { Search as SearchIcon, Filter, ExternalLink, Bookmark, Loader2, ChevronDown } from "lucide-react"
+import { Search as SearchIcon, Filter, ExternalLink, Bookmark, Loader2, ChevronDown, Sparkles } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,7 +28,8 @@ interface Paper {
 }
 
 const SOURCE_META: Record<string, { label: string; cls: string }> = {
-  openalex:        { label: "OpenAlex",         cls: "source-openalex" },
+  all:             { label: "All Sources",       cls: "source-all" },
+  openalex:        { label: "OpenAlex",          cls: "source-openalex" },
   semanticscholar: { label: "Semantic Scholar",  cls: "source-semanticscholar" },
   crossref:        { label: "Crossref",          cls: "source-crossref" },
   ieee:            { label: "IEEE Xplore",       cls: "source-ieee" },
@@ -43,6 +44,8 @@ export default function SearchPage() {
   const [keyword, setKeyword] = useState(initialKeyword)
   const [source, setSource] = useState("openalex")
   const [year, setYear] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageInput, setPageInput] = useState("1")
 
   const [papers, setPapers] = useState<Paper[]>([])
   const [total, setTotal] = useState(0)
@@ -50,6 +53,10 @@ export default function SearchPage() {
   const [savingPaperId, setSavingPaperId] = useState<string | null>(null)
   const [savedPaperIds, setSavedPaperIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState("")
+
+  // ── Keyword suggestions (Gemini) ──────────────────────────────────────
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [isSuggesting, setIsSuggesting] = useState(false)
 
   const getSourceErrorMessage = (
     selectedSource: string,
@@ -71,16 +78,20 @@ export default function SearchPage() {
     return providerMessage || "Failed to fetch results. Please try again."
   }
 
-  const fetchResults = async (query: string, sourceOverride = source) => {
+  const fetchResults = async (query: string, sourceOverride = source, pageNum = 1) => {
     if (!query) return
     setIsLoading(true)
     setError("")
     try {
-      const params: any = { keyword: query, source: sourceOverride }
+      const params: any = { keyword: query, source: sourceOverride, page: pageNum }
       if (year) params.year = parseInt(year)
       const res = await api.get(`/sources/search`, { params })
       setPapers(res.data.papers || [])
       setTotal(res.data.total || 0)
+      setPage(pageNum)
+      setPageInput(pageNum.toString())
+      // Fetch suggestions sau khi có kết quả
+      fetchSuggestions(query)
     } catch (err: any) {
       console.error(err)
       setError(getSourceErrorMessage(sourceOverride, err.response?.status, err.response?.data?.message))
@@ -89,8 +100,23 @@ export default function SearchPage() {
     }
   }
 
+  const fetchSuggestions = async (query: string) => {
+    if (!query) return
+    setIsSuggesting(true)
+    setSuggestions([])
+    try {
+      const res = await api.get(`/sources/suggest`, { params: { keyword: query } })
+      setSuggestions(res.data.suggestions || [])
+    } catch (err) {
+      console.warn("[suggestions] Gemini unavailable:", err)
+      // Không show lỗi cho user — feature phụ trợ
+    } finally {
+      setIsSuggesting(false)
+    }
+  }
+
   useEffect(() => {
-    if (initialKeyword) fetchResults(initialKeyword)
+    if (initialKeyword) fetchResults(initialKeyword, source, 1)
   }, [initialKeyword])
 
   const handleSearch = (e: React.FormEvent) => {
@@ -230,6 +256,7 @@ export default function SearchPage() {
         </form>
       </div>
 
+
       <div className="flex gap-6">
         {/* Filter sidebar */}
         <aside className="w-60 hidden lg:flex flex-col gap-4 shrink-0">
@@ -277,7 +304,7 @@ export default function SearchPage() {
               </div>
               <Button
                 className="w-full h-9 rounded-lg text-sm"
-                onClick={() => fetchResults(initialKeyword || keyword)}
+                onClick={() => fetchResults(initialKeyword || keyword, source, 1)}
               >
                 Apply Filters
               </Button>
@@ -309,7 +336,7 @@ export default function SearchPage() {
                   variant="outline"
                   size="sm"
                   className="mt-3"
-                  onClick={() => { setSource("openalex"); fetchResults(initialKeyword || keyword, "openalex") }}
+                  onClick={() => { setSource("openalex"); fetchResults(initialKeyword || keyword, "openalex", 1) }}
                 >
                   Try OpenAlex instead
                 </Button>
@@ -432,9 +459,127 @@ export default function SearchPage() {
                   )
                 })}
               </AnimatePresence>
+
+              {/* Pagination */}
+              {papers.length > 0 && total > 0 && (
+                <div className="flex justify-between items-center mt-6 pt-6 border-t border-border/40">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                      fetchResults(initialKeyword || keyword, source, page - 1)
+                    }}
+                    disabled={page <= 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                    <span>Page</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={Math.max(1, Math.ceil(total / 20))}
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const p = parseInt(pageInput, 10)
+                          const maxPages = Math.max(1, Math.ceil(total / 20))
+                          if (!isNaN(p) && p >= 1 && p <= maxPages) {
+                            window.scrollTo({ top: 0, behavior: "smooth" })
+                            fetchResults(initialKeyword || keyword, source, p)
+                          } else {
+                            setPageInput(page.toString())
+                          }
+                        }
+                      }}
+                      onBlur={() => setPageInput(page.toString())}
+                      className="w-16 h-8 text-center px-1 py-1"
+                    />
+                    <span>of {Math.max(1, Math.ceil(total / 20))}</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                      fetchResults(initialKeyword || keyword, source, page + 1)
+                    }}
+                    disabled={page >= Math.ceil(total / 20) || isLoading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </motion.div>
           )}
         </div>
+
+        {/* ── Right Sidebar: Gemini AI Suggestions ──────────────── */}
+        <aside className="w-56 hidden xl:flex flex-col gap-4 shrink-0">
+          <div className="glass rounded-xl border border-border/40 sticky top-20 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 bg-primary/5">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Related Topics</span>
+            </div>
+
+            <div className="p-3 flex flex-col gap-2">
+              {/* Loading skeletons */}
+              {isSuggesting && !suggestions.length && (
+                <>
+                  <p className="text-xs text-muted-foreground px-1 mb-1">AI is thinking...</p>
+                  {[80, 64, 72, 56, 68].map((w, i) => (
+                    <div key={i} className="shimmer h-8 rounded-lg" style={{ width: `${w}%` }} />
+                  ))}
+                </>
+              )}
+
+              {/* Empty state */}
+              {!isSuggesting && suggestions.length === 0 && initialKeyword && (
+                <p className="text-xs text-muted-foreground text-center py-4 px-2">
+                  Search for a topic to get AI-powered keyword suggestions.
+                </p>
+              )}
+              {!isSuggesting && !initialKeyword && (
+                <p className="text-xs text-muted-foreground text-center py-4 px-2">
+                  Enter a keyword to see related research topics.
+                </p>
+              )}
+
+              {/* Suggestion list */}
+              <AnimatePresence>
+                {suggestions.map((s, i) => (
+                  <motion.button
+                    key={s}
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 12 }}
+                    transition={{ delay: i * 0.08 }}
+                    onClick={() => {
+                      setKeyword(s);
+                      navigate(`/search?keyword=${encodeURIComponent(s)}`);
+                    }}
+                    className="w-full text-left flex items-start gap-2 px-3 py-2 rounded-lg border border-transparent hover:border-primary/30 hover:bg-primary/8 text-xs text-foreground/80 hover:text-primary transition-all duration-200 group"
+                  >
+                    <SearchIcon className="h-3 w-3 mt-0.5 shrink-0 text-primary/50 group-hover:text-primary transition-colors" />
+                    <span className="leading-snug">{s}</span>
+                  </motion.button>
+                ))}
+              </AnimatePresence>
+
+              {/* Regenerate button */}
+              {suggestions.length > 0 && !isSuggesting && (
+                <button
+                  onClick={() => fetchSuggestions(initialKeyword)}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-primary py-1.5 border-t border-border/30 transition-colors"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Regenerate
+                </button>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   )

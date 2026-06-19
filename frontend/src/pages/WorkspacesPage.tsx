@@ -12,6 +12,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import api from "@/lib/api"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -34,6 +41,8 @@ export default function WorkspacesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
   const [newWorkspaceDesc, setNewWorkspaceDesc] = useState("")
+  const [newWorkspaceVisibility, setNewWorkspaceVisibility] = useState("private")
+  const [newWorkspacePlan, setNewWorkspacePlan] = useState("free")
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -54,19 +63,26 @@ export default function WorkspacesPage() {
     e.preventDefault()
     if (!newWorkspaceName) return
     setIsDialogOpen(false)
+    setIsLoading(true) // Show shimmer while refetching
     try {
-      const res = await api.post("/workspaces", { name: newWorkspaceName, description: newWorkspaceDesc })
-      if (res.data.workspace) {
-        setWorkspaces([...workspaces, res.data.workspace])
-      } else {
-        const listRes = await api.get("/workspaces")
-        setWorkspaces(listRes.data.workspaces || [])
-      }
+      await api.post("/workspaces", {
+        name: newWorkspaceName,
+        description: newWorkspaceDesc,
+        visibility: newWorkspaceVisibility,
+        plan: newWorkspacePlan,
+      })
+      // Re-fetch to ensure data consistency and stats are properly populated
+      const listRes = await api.get("/workspaces")
+      setWorkspaces(listRes.data.workspaces || [])
     } catch (err: any) {
       console.error("Failed to create workspace", err)
+    } finally {
+      setIsLoading(false)
+      setNewWorkspaceName("")
+      setNewWorkspaceDesc("")
+      setNewWorkspaceVisibility("private")
+      setNewWorkspacePlan("free")
     }
-    setNewWorkspaceName("")
-    setNewWorkspaceDesc("")
   }
 
   return (
@@ -118,6 +134,34 @@ export default function WorkspacesPage() {
                   onChange={(e) => setNewWorkspaceDesc(e.target.value)}
                   className="h-11 rounded-xl bg-muted/30 border-border/50 focus-visible:border-primary/50"
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Visibility</label>
+                    <Select value={newWorkspaceVisibility} onValueChange={(v) => setNewWorkspaceVisibility(v ?? "private")}>
+                      <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="private">Private</SelectItem>
+                        <SelectItem value="team">Team</SelectItem>
+                        <SelectItem value="public">Public</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Plan</label>
+                    <Select value={newWorkspacePlan} onValueChange={(v) => setNewWorkspacePlan(v ?? "free")}>
+                      <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="free">Free</SelectItem>
+                        <SelectItem value="pro">Pro</SelectItem>
+                        <SelectItem value="team">Team</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
