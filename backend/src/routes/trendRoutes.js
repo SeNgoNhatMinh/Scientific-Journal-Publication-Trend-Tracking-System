@@ -63,6 +63,37 @@ router.post('/compare', trendController.compareTrends);
 
 /**
  * @swagger
+ * /trends/research-directions:
+ *   post:
+ *     tags:
+ *       - Trends
+ *     security: []
+ *     summary: Sinh hướng nghiên cứu có evidence papers
+ *     description: Builds evidence-backed research directions from one trend keyword.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [keyword]
+ *             properties:
+ *               keyword:
+ *                 type: string
+ *                 example: mamba
+ *               trendContext:
+ *                 type: object
+ *               limit:
+ *                 type: integer
+ *                 default: 5
+ *     responses:
+ *       200:
+ *         description: Evidence-backed research directions retrieved
+ */
+router.post('/research-directions', trendController.getResearchDirections);
+
+/**
+ * @swagger
  * /trends/emerging:
  *   get:
  *     tags:
