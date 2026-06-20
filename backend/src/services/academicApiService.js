@@ -91,6 +91,29 @@ const toProviderError = (source, error) => {
   throw providerError;
 };
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+let semanticScholarQueue = Promise.resolve();
+let lastSemanticScholarRequestAt = 0;
+
+/**
+ * Semantic Scholar approved key is limited to 1 request/second cumulatively.
+ * Queue all S2 calls in this process to avoid immediate 429s during demos.
+ */
+const semanticScholarRequest = requestFn => {
+  const run = semanticScholarQueue.catch(() => {}).then(async () => {
+    const elapsed = Date.now() - lastSemanticScholarRequestAt;
+    if (elapsed < 1100) {
+      await sleep(1100 - elapsed);
+    }
+    lastSemanticScholarRequestAt = Date.now();
+    return requestFn();
+  });
+
+  semanticScholarQueue = run.catch(() => {});
+  return run;
+};
+
 const cleanDoi = doi => {
   const value = String(doi || '').trim();
   if (!value) return null;
@@ -262,10 +285,12 @@ const enrichPaperAuthorsOnly = async paper => {
   const arxivId = extractArxivId(paper.url);
   if (arxivId && envConfig.SEMANTIC_SCHOLAR_API_KEY) {
     try {
-      const resp = await semanticScholarClient.get(`/paper/arXiv:${arxivId}`, {
-        headers: buildHeaders('semanticscholar'),
-        params: { fields: 'title,authors,year,externalIds,venue,citationCount,abstract' },
-      });
+      const resp = await semanticScholarRequest(() =>
+        semanticScholarClient.get(`/paper/arXiv:${arxivId}`, {
+          headers: buildHeaders('semanticscholar'),
+          params: { fields: 'title,authors,year,externalIds,venue,citationCount,abstract' },
+        })
+      );
       const it = resp.data;
       if (it?.authors?.length) {
         return {
@@ -537,25 +562,33 @@ const searchPapers = async (source, keyword, options = {}) => {
   }
 
   if (normalizedSource === 'semanticscholar') {
-    const response = await semanticScholarClient.get('/paper/search', {
-      headers: buildHeaders(normalizedSource),
-      params: {
-        query: year ? `${keyword} year:${year}` : keyword,
-        fields: 'title,year,citationCount,authors,abstract,venue,externalIds,url',
-        limit,
-        offset: (page - 1) * limit,
-      },
-    });
+    const cacheKey = `semanticscholar:search:${keyword}:${page}:${limit}:${year || ''}`;
+    const cached = searchCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await semanticScholarRequest(() =>
+      semanticScholarClient.get('/paper/search', {
+        headers: buildHeaders(normalizedSource),
+        params: {
+          query: year ? `${keyword} year:${year}` : keyword,
+          fields: 'title,year,citationCount,authors,abstract,venue,externalIds,url',
+          limit,
+          offset: (page - 1) * limit,
+        },
+      })
+    );
 
     const papers = (response.data.data || [])
       .map(paper => normalizePaper('semanticscholar', paper))
       .filter(paper => !year || paper.publicationYear === year);
 
-    return {
+    const result = {
       source: normalizedSource,
       total: response.data.total || papers.length,
       papers,
     };
+    searchCache.set(cacheKey, result);
+    return result;
   }
 
   if (normalizedSource === 'ieee') {
@@ -708,15 +741,17 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
   }
 
   if (normalizedSource === 'semanticscholar') {
-    const response = await semanticScholarClient.get('/paper/search', {
-      headers: buildHeaders(normalizedSource),
-      params: {
-        query: keyword,
-        fields: 'title,year',
-        limit: 100,
-        offset: 0,
-      },
-    });
+    const response = await semanticScholarRequest(() =>
+      semanticScholarClient.get('/paper/search', {
+        headers: buildHeaders(normalizedSource),
+        params: {
+          query: keyword,
+          fields: 'title,year',
+          limit: 100,
+          offset: 0,
+        },
+      })
+    );
 
     const counts = new Map();
     for (let year = startYear; year <= currentYear; year += 1) {
@@ -832,15 +867,17 @@ const getAuthorInfo = async (source, query) => {
   }
 
   if (normalizedSource === 'semanticscholar') {
-    const response = await semanticScholarClient.get('/author/search', {
-      headers: buildHeaders(normalizedSource),
-      params: {
-        query,
-        fields: 'name,citationCount,paperCount',
-        limit: 20,
-        offset: 0,
-      },
-    });
+    const response = await semanticScholarRequest(() =>
+      semanticScholarClient.get('/author/search', {
+        headers: buildHeaders(normalizedSource),
+        params: {
+          query,
+          fields: 'name,citationCount,paperCount',
+          limit: 20,
+          offset: 0,
+        },
+      })
+    );
 
     return {
       source: normalizedSource,

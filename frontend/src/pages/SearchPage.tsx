@@ -64,7 +64,7 @@ export default function SearchPage() {
     providerMessage?: string
   ) => {
     if (status === 429 && selectedSource === "semanticscholar") {
-      return "Semantic Scholar is rate-limiting requests. Wait 1-2 minutes or switch to OpenAlex for a more stable demo."
+      return "Semantic Scholar allows 1 request per second for this key. Wait a moment, search again, or switch to OpenAlex for a more stable demo."
     }
     if (status === 403 && selectedSource === "ieee") {
       return providerMessage || "IEEE Xplore rejected this key/account. Activate the IEEE developer account/key before using this source."
