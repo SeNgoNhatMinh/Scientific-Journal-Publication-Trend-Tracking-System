@@ -60,6 +60,7 @@ export default function WorkspaceDetailsPage() {
   // Add paper
   const [showAddPaper, setShowAddPaper] = useState(false)
   const [paperQuery, setPaperQuery] = useState("")
+  const [paperSource, setPaperSource] = useState("openalex")
   const [paperResults, setPaperResults] = useState<any[]>([])
   const [isSearchingPapers, setIsSearchingPapers] = useState(false)
   const [addingPaperId, setAddingPaperId] = useState<string | null>(null)
@@ -186,6 +187,7 @@ export default function WorkspaceDetailsPage() {
       if (source === "openalex") externalIds.openalex = paper.id
       if (source === "semanticscholar") externalIds.semanticScholar = paper.id
       if (source === "crossref") externalIds.crossref = paper.id
+      if (source === "arxiv") externalIds.arxiv = paper.id
       if (source === "ieee") externalIds.ieee = paper.id
       if (source === "exa") externalIds.exa = paper.id
     }
@@ -215,7 +217,7 @@ export default function WorkspaceDetailsPage() {
     setPaperError("")
     try {
       const res = await api.get("/sources/search", {
-        params: { source: "openalex", keyword: paperQuery.trim(), limit: 6 },
+        params: { source: paperSource, keyword: paperQuery.trim(), limit: 6 },
       })
       setPaperResults(res.data.papers || [])
     } catch (err: any) {
@@ -622,6 +624,18 @@ export default function WorkspaceDetailsPage() {
                       placeholder="Search paper to add..."
                     />
                   </div>
+                  <Select value={paperSource} onValueChange={(value) => setPaperSource(value ?? "openalex")}>
+                    <SelectTrigger className="h-10 rounded-xl bg-muted/30 border-border/50 md:w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openalex">OpenAlex</SelectItem>
+                      <SelectItem value="arxiv">arXiv</SelectItem>
+                      <SelectItem value="crossref">Crossref</SelectItem>
+                      <SelectItem value="semanticscholar">Semantic Scholar</SelectItem>
+                      <SelectItem value="exa">Exa Research</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button type="submit" disabled={isSearchingPapers || !paperQuery.trim()} className="rounded-xl">
                     {isSearchingPapers ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
                   </Button>

@@ -6,11 +6,12 @@ const envConfig = require('../config/env');
 const searchCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
 
 const normalizeSource = source => {
-  const value = String(source || 'openalex').toLowerCase().replace(/[_-]/g, '');
+  const value = String(source || 'openalex').trim().toLowerCase().replace(/[_-]/g, '');
 
   if (value === 'openalex') return 'openalex';
   if (value === 'semanticscholar' || value === 'semantic') return 'semanticscholar';
   if (value === 'crossref') return 'crossref';
+  if (value === 'arxiv') return 'arxiv';
   if (value === 'ieee' || value === 'ieeexplore') return 'ieee';
   if (value === 'exa') return 'exa';
 
@@ -55,6 +56,11 @@ const openAlexClient = axios.create({
   headers: {
     'User-Agent': `journal-trend-backend (mailto:${envConfig.OPENALEX_MAILTO})`,
   },
+});
+
+const arxivClient = axios.create({
+  baseURL: envConfig.ARXIV_API_URL,
+  timeout: apiTimeout,
 });
 
 const ieeeClient = axios.create({
@@ -143,6 +149,93 @@ const extractDoiFromText = (...values) => {
   return cleanDoi(match?.[0]);
 };
 
+const decodeXml = value =>
+  String(value || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const getXmlTag = (xml, tagName) => {
+  const escapedTag = tagName.replace(':', '\\:');
+  const match = String(xml || '').match(new RegExp(`<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTag}>`, 'i'));
+  return match ? decodeXml(match[1]) : null;
+};
+
+const getArxivDoi = entry =>
+  getXmlTag(entry, 'arxiv:doi') ||
+  getXmlTag(entry, 'doi') ||
+  extractDoiFromText(entry);
+
+const getArxivLinks = entry => {
+  const links = {};
+  const linkRegex = /<link\b([^>]*)\/?>/gi;
+  let match;
+  while ((match = linkRegex.exec(String(entry || ''))) !== null) {
+    const attrs = match[1] || '';
+    const href = attrs.match(/\bhref="([^"]+)"/i)?.[1];
+    const rel = attrs.match(/\brel="([^"]+)"/i)?.[1] || 'alternate';
+    const title = attrs.match(/\btitle="([^"]+)"/i)?.[1];
+    if (!href) continue;
+    if (title === 'pdf' || /\/pdf\//i.test(href)) links.pdf = href;
+    if (rel === 'alternate') links.url = href;
+  }
+  return links;
+};
+
+const parseArxivFeed = xml => {
+  const total = parseInt(getXmlTag(xml, 'opensearch:totalResults') || '0', 10) || 0;
+  const entries = [];
+  const entryRegex = /<entry>([\s\S]*?)<\/entry>/gi;
+  let match;
+  while ((match = entryRegex.exec(String(xml || ''))) !== null) {
+    const entry = match[1];
+    const authors = [];
+    const authorRegex = /<author>([\s\S]*?)<\/author>/gi;
+    let authorMatch;
+    while ((authorMatch = authorRegex.exec(entry)) !== null) {
+      const name = getXmlTag(authorMatch[1], 'name');
+      if (name) authors.push({ authorId: null, name });
+    }
+
+    const links = getArxivLinks(entry);
+    const id = getXmlTag(entry, 'id');
+    const publishedDate = getXmlTag(entry, 'published');
+    const publicationYear = publishedDate ? parseInt(publishedDate.slice(0, 4), 10) : extractArxivYear(id);
+
+    entries.push({
+      id,
+      title: getXmlTag(entry, 'title'),
+      abstract: getXmlTag(entry, 'summary'),
+      doi: getArxivDoi(entry),
+      publishedDate,
+      publicationYear: Number.isNaN(publicationYear) ? null : publicationYear,
+      citationCount: 0,
+      authors,
+      journalName: 'arXiv',
+      url: firstUrl(links.url, id),
+      pdfUrl: links.pdf || null,
+      source: 'arxiv',
+    });
+  }
+
+  return { total, entries };
+};
+
+const buildArxivQuery = keyword => {
+  const terms = String(keyword || '')
+    .trim()
+    .split(/\s+/)
+    .map(term => term.replace(/[^\w.-]/g, ''))
+    .filter(Boolean)
+    .slice(0, 8);
+  return terms.length ? terms.map(term => `all:${term}`).join(' AND ') : 'all:research';
+};
+
 const openAlexInvertedIndexToText = invertedIndex => {
   if (!invertedIndex || typeof invertedIndex !== 'object' || Array.isArray(invertedIndex)) {
     return null;
@@ -200,6 +293,64 @@ const crossrefDatePartsToYear = item =>
   item['published-print']?.['date-parts']?.[0]?.[0] ||
   item['published-online']?.['date-parts']?.[0]?.[0] ||
   null;
+
+const enrichArxivPaperDoi = async paper => {
+  if (paper.doi || !paper.title) return paper;
+
+  const applyCrossrefItem = item => {
+    if (!item) return null;
+    const crossrefTitle = Array.isArray(item.title) ? item.title[0] : item.title;
+    if (titleSimilarity(paper.title, crossrefTitle) < 0.45) return null;
+
+    const doi = cleanDoi(item.DOI || item.doi);
+    if (!doi) return null;
+
+    const authors = formatCrossrefAuthors(item.author);
+    return {
+      ...paper,
+      doi,
+      // Keep arXiv URL as primary source link, but expose DOI for DOI badge/save.
+      authors: paper.authors?.length ? paper.authors : authors,
+      journalName: paper.journalName && paper.journalName !== 'arXiv'
+        ? paper.journalName
+        : item['container-title']?.[0] || item.publisher || 'arXiv',
+      citationCount: paper.citationCount || item['is-referenced-by-count'] || 0,
+      publicationYear: paper.publicationYear || crossrefDatePartsToYear(item) || null,
+      publishedDate: paper.publishedDate || crossrefDatePartsToDate(item) || null,
+    };
+  };
+
+  try {
+    const titleResponse = await crossrefClient.get('/works', {
+      params: {
+        'query.title': paper.title,
+        rows: 3,
+        mailto: envConfig.CROSSREF_MAILTO,
+      },
+    });
+    const byTitle = (titleResponse.data.message?.items || [])
+      .map(applyCrossrefItem)
+      .find(Boolean);
+    if (byTitle) return byTitle;
+  } catch { /* fall through */ }
+
+  try {
+    const authorText = (paper.authors || []).slice(0, 2).map(author => author.name).join(' ');
+    const bibliographicResponse = await crossrefClient.get('/works', {
+      params: {
+        query: [paper.title, authorText, paper.publicationYear].filter(Boolean).join(' '),
+        rows: 3,
+        mailto: envConfig.CROSSREF_MAILTO,
+      },
+    });
+    const byBibliographic = (bibliographicResponse.data.message?.items || [])
+      .map(applyCrossrefItem)
+      .find(Boolean);
+    if (byBibliographic) return byBibliographic;
+  } catch { /* fall through */ }
+
+  return paper;
+};
 
 const extractArxivYear = url => {
   const match = String(url || '').match(/arxiv\.org\/(?:abs|html|pdf)\/(\d{2})(\d{2})\./i);
@@ -487,6 +638,25 @@ const normalizePaper = (source, paper) => {
     };
   }
 
+  if (source === 'arxiv') {
+    const doi = cleanDoi(paper.doi);
+    const url = firstUrl(paper.url, paper.id);
+    return {
+      id: paper.id || url,
+      title: paper.title,
+      abstract: paper.abstract || null,
+      doi,
+      publishedDate: paper.publishedDate || null,
+      publicationYear: paper.publicationYear || extractArxivYear(url),
+      citationCount: paper.citationCount || 0,
+      authors: paper.authors || [],
+      journalName: paper.journalName || 'arXiv',
+      url,
+      pdfUrl: paper.pdfUrl || null,
+      source: 'arxiv',
+    };
+  }
+
   return {
     id: paper.DOI || paper.doi || paper.URL,
     title: Array.isArray(paper.title) ? paper.title[0] : paper.title,
@@ -585,6 +755,41 @@ const searchPapers = async (source, keyword, options = {}) => {
     const result = {
       source: normalizedSource,
       total: response.data.total || papers.length,
+      papers,
+    };
+    searchCache.set(cacheKey, result);
+    return result;
+  }
+
+  if (normalizedSource === 'arxiv') {
+    const cacheKey = `arxiv:search:${keyword}:${page}:${limit}:${year || ''}`;
+    const cached = searchCache.get(cacheKey);
+    if (cached) return cached;
+
+    let response;
+    try {
+      response = await arxivClient.get('/api/query', {
+        params: {
+          search_query: buildArxivQuery(keyword),
+          start: (page - 1) * limit,
+          max_results: Math.min(limit, 25),
+          sortBy: 'submittedDate',
+          sortOrder: 'descending',
+        },
+      });
+    } catch (error) {
+      toProviderError('arXiv', error);
+    }
+
+    const parsed = parseArxivFeed(response.data);
+    const normalizedPapers = parsed.entries
+      .map(paper => normalizePaper('arxiv', paper))
+      .filter(paper => !year || paper.publicationYear === year);
+    const papers = await Promise.all(normalizedPapers.map(enrichArxivPaperDoi));
+
+    const result = {
+      source: normalizedSource,
+      total: parsed.total || papers.length,
       papers,
     };
     searchCache.set(cacheKey, result);
