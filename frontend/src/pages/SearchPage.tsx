@@ -32,6 +32,7 @@ const SOURCE_META: Record<string, { label: string; cls: string }> = {
   openalex:        { label: "OpenAlex",          cls: "source-openalex" },
   semanticscholar: { label: "Semantic Scholar",  cls: "source-semanticscholar" },
   crossref:        { label: "Crossref",          cls: "source-crossref" },
+  arxiv:           { label: "arXiv",             cls: "source-arxiv" },
   ieee:            { label: "IEEE Xplore",       cls: "source-ieee" },
   exa:             { label: "Exa Research",      cls: "source-exa" },
 }
@@ -150,6 +151,7 @@ export default function SearchPage() {
       if (paper.source === "openalex") externalIds.openalex = paper.id
       if (paper.source === "semanticscholar") externalIds.semanticScholar = paper.id
       if (paper.source === "crossref") externalIds.crossref = paper.id
+      if (paper.source === "arxiv") externalIds.arxiv = paper.id
       if (paper.source === "ieee") externalIds.ieee = paper.id
       if (paper.source === "exa") externalIds.exa = paper.id
     }
@@ -278,6 +280,7 @@ export default function SearchPage() {
                     <option value="openalex">OpenAlex</option>
                     <option value="semanticscholar">Semantic Scholar</option>
                     <option value="crossref">Crossref</option>
+                    <option value="arxiv">arXiv</option>
                     <option value="ieee">IEEE Xplore</option>
                     <option value="exa">Exa Research</option>
                   </select>

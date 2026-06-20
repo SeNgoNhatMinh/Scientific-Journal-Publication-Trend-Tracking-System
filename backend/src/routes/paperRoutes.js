@@ -39,7 +39,7 @@ const router = express.Router();
  *         name: source
  *         schema:
  *           type: string
- *           enum: [openalex, semantic_scholar, crossref, ieee, exa]
+ *           enum: [openalex, semantic_scholar, crossref, arxiv, ieee, exa]
  *         description: Optional local database source filter
  *       - in: query
  *         name: analysisRunId

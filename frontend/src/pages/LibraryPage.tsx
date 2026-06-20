@@ -14,6 +14,7 @@ const SOURCE_COLORS: Record<string, string> = {
   openalex: "source-openalex",
   semanticscholar: "source-semanticscholar",
   crossref: "source-crossref",
+  arxiv: "source-arxiv",
   ieee: "source-ieee",
   exa: "source-exa",
 }
