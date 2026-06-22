@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from "path"
 
 const RAILWAY_URL = 'https://scientific-journal-publication-trend-tracking-sy-production.up.railway.app';
-const LOCAL_BACKEND = process.env.VITE_BACKEND_URL || 'http://localhost:5001';
+const LOCAL_BACKEND = process.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 // Dev mặc định dùng backend local. Set VITE_USE_LOCAL_BACKEND=false nếu muốn proxy Railway.
 const USE_LOCAL = process.env.VITE_USE_LOCAL_BACKEND !== 'false';

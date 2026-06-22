@@ -13,6 +13,7 @@ import {
   Search, RefreshCw, AlertCircle, Plus, Edit2, Trash2, Loader2, Tag, TrendingUp, Activity, ChevronLeft, ChevronRight
 } from "lucide-react"
 import api from "@/lib/api"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 type KeywordItem = {
   _id: string
@@ -37,6 +38,18 @@ export default function AdminKeywordsPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+    variant?: "default" | "destructive"
+  }>({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: () => {}
+  })
 
   // Dialog state
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -149,18 +162,25 @@ export default function AdminKeywordsPage() {
     }
   }
 
-  const handleDelete = async (keywordId: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete keyword "${name}"?`)) return
+  const handleDelete = (keywordId: string, name: string) => {
     setError(null)
-    try {
-      const res = await api.delete(`/keywords/${keywordId}`)
-      if (res.data.success) {
-        setKeywords(prev => prev.filter(k => k._id !== keywordId))
-        setTotal(t => t - 1)
+    setConfirmState({
+      isOpen: true,
+      title: "Delete Keyword",
+      description: `Are you sure you want to delete keyword "${name}"? This action cannot be undone.`,
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          const res = await api.delete(`/keywords/${keywordId}`)
+          if (res.data.success) {
+            setKeywords(prev => prev.filter(k => k._id !== keywordId))
+            setTotal(t => t - 1)
+          }
+        } catch (err: any) {
+          setError(err.response?.data?.message || "Failed to delete keyword")
+        }
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to delete keyword")
-    }
+    })
   }
 
   const getCategoryColor = (cat: string) => {
@@ -300,7 +320,7 @@ export default function AdminKeywordsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {keywords.map((kw, idx) => (
+                {keywords.map((kw) => (
                   <TableRow
                     key={kw._id}
                     className="border-border/20 hover:bg-muted/20 transition-colors group"
@@ -502,6 +522,14 @@ export default function AdminKeywordsPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

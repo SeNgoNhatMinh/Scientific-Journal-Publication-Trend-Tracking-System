@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   useColorScheme,
   FlatList,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -26,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 export default function AdminAuthorsScreen() {
   const systemScheme = useColorScheme();
@@ -35,6 +35,32 @@ export default function AdminAuthorsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
+
+  // Custom Alert / Confirm Modal state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'alert' | 'confirm'>('alert');
+  const [alertOnConfirm, setAlertOnConfirm] = useState<() => void>(() => {});
+  const [alertIsDestructive, setAlertIsDestructive] = useState(false);
+
+  const showCustomAlert = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('alert');
+    setAlertOnConfirm(() => {});
+    setAlertIsDestructive(false);
+    setAlertVisible(true);
+  };
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('confirm');
+    setAlertOnConfirm(() => onConfirm);
+    setAlertIsDestructive(isDestructive);
+    setAlertVisible(true);
+  };
 
   // Form Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -54,6 +80,10 @@ export default function AdminAuthorsScreen() {
       setAuthors(res.data.data || []);
     } catch (err) {
       console.error(err);
+      showCustomAlert(
+        'Network Error',
+        'Could not load authors. Please check that the server is running and accessible.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +116,7 @@ export default function AdminAuthorsScreen() {
 
   const handleSave = async () => {
     if (!fullName.trim()) {
-      Alert.alert('Validation Error', 'Full Name is required');
+      showCustomAlert('Validation Error', 'Full Name is required');
       return;
     }
 
@@ -115,34 +145,28 @@ export default function AdminAuthorsScreen() {
         fetchAuthors();
       }
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.message || 'Failed to save author');
+      showCustomAlert('Error', e.response?.data?.message || 'Failed to save author');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = (authorId: string, name: string) => {
-    Alert.alert(
+    showCustomConfirm(
       'Delete Author',
       `Are you sure you want to permanently delete "${name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setActionId(authorId);
-            try {
-              await api.delete(`/authors/${authorId}`);
-              setAuthors((prev) => prev.filter((a) => a._id !== authorId));
-            } catch (e: any) {
-              Alert.alert('Error', e.response?.data?.message || 'Failed to delete');
-            } finally {
-              setActionId(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setActionId(authorId);
+        try {
+          await api.delete(`/authors/${authorId}`);
+          setAuthors((prev) => prev.filter((a) => a._id !== authorId));
+        } catch (e: any) {
+          showCustomAlert('Error', e.response?.data?.message || 'Failed to delete');
+        } finally {
+          setActionId(null);
+        }
+      },
+      true
     );
   };
 
@@ -332,6 +356,16 @@ export default function AdminAuthorsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmModal
+        visible={alertVisible}
+        onClose={() => setAlertVisible(false)}
+        onConfirm={alertOnConfirm}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        isDestructive={alertIsDestructive}
+      />
     </View>
   );
 }

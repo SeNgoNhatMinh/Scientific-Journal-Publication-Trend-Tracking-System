@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   useColorScheme,
   FlatList,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 const ROLE_COLORS: Record<string, string> = {
   admin: '#ef4444',
@@ -41,6 +42,37 @@ export default function AdminUsersScreen() {
   const [search, setSearch] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
 
+  // Custom Alert / Confirm Modal state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'alert' | 'confirm'>('alert');
+  const [alertOnConfirm, setAlertOnConfirm] = useState<() => void>(() => {});
+  const [alertIsDestructive, setAlertIsDestructive] = useState(false);
+
+  // Role Selection Modal state
+  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string>('student');
+
+  const showCustomAlert = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('alert');
+    setAlertOnConfirm(() => {});
+    setAlertIsDestructive(false);
+    setAlertVisible(true);
+  };
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('confirm');
+    setAlertOnConfirm(() => onConfirm);
+    setAlertIsDestructive(isDestructive);
+    setAlertVisible(true);
+  };
+
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
@@ -50,6 +82,10 @@ export default function AdminUsersScreen() {
       setUsers(res.data.data || []);
     } catch (err) {
       console.error(err);
+      showCustomAlert(
+        'Network Error',
+        'Could not load users. Please check that the server is running and accessible.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -73,54 +109,45 @@ export default function AdminUsersScreen() {
     }
   };
 
-  const handleChangeRole = async (userId: string, currentRole: string) => {
-    // Show role selection Alert options
-    const roles = ['student', 'researcher', 'lecturer', 'admin'];
-    const buttons = roles.map((role) => ({
-      text: role.toUpperCase(),
-      onPress: async () => {
-        setActionId(userId + '-role');
+  const handleChangeRole = (userId: string, currentRole: string) => {
+    setSelectedUserId(userId);
+    setSelectedRole(currentRole);
+    setRoleModalVisible(true);
+  };
+
+  const handleSaveRole = async () => {
+    if (!selectedUserId) return;
+    setRoleModalVisible(false);
+    setActionId(selectedUserId + '-role');
+    try {
+      const res = await api.put(`/users/${selectedUserId}/role`, { role: selectedRole });
+      setUsers((prev) =>
+        prev.map((u) => (u._id === selectedUserId ? { ...u, role: res.data.data.role } : u))
+      );
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setActionId(null);
+      setSelectedUserId(null);
+    }
+  };
+
+  const handleDelete = (userId: string, name: string) => {
+    showCustomConfirm(
+      'Delete Account',
+      `Are you sure you want to permanently delete "${name}"?`,
+      async () => {
+        setActionId(userId + '-delete');
         try {
-          const res = await api.put(`/users/${userId}/role`, { role });
-          setUsers((prev) =>
-            prev.map((u) => (u._id === userId ? { ...u, role: res.data.data.role } : u))
-          );
+          await api.delete(`/users/${userId}`);
+          setUsers((prev) => prev.filter((u) => u._id !== userId));
         } catch (e) {
           console.error(e);
         } finally {
           setActionId(null);
         }
       },
-    }));
-
-    Alert.alert('Change User Role', 'Select a new role for this user:', [
-      ...buttons,
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const handleDelete = (userId: string, name: string) => {
-    Alert.alert(
-      'Delete Account',
-      `Are you sure you want to permanently delete "${name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setActionId(userId + '-delete');
-            try {
-              await api.delete(`/users/${userId}`);
-              setUsers((prev) => prev.filter((u) => u._id !== userId));
-            } catch (e) {
-              console.error(e);
-            } finally {
-              setActionId(null);
-            }
-          },
-        },
-      ]
+      true
     );
   };
 
@@ -229,6 +256,71 @@ export default function AdminUsersScreen() {
           }}
         />
       )}
+
+      {/* Custom Role Selection Modal */}
+      <Modal
+        visible={roleModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setRoleModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Change User Role</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.muted }]}>Select a new role for this user:</Text>
+            
+            <View style={styles.roleOptionsContainer}>
+              {['student', 'researcher', 'lecturer', 'admin'].map((role) => {
+                const isSelected = selectedRole === role;
+                const roleColor = ROLE_COLORS[role] || '#888';
+                return (
+                  <TouchableOpacity
+                    key={role}
+                    onPress={() => setSelectedRole(role)}
+                    style={[
+                      styles.roleOptionBtn,
+                      {
+                        borderColor: isSelected ? roleColor : theme.border,
+                        backgroundColor: isSelected ? roleColor + '15' : 'transparent',
+                      }
+                    ]}
+                  >
+                    <View style={[styles.roleOptionDot, { backgroundColor: isSelected ? roleColor : theme.border }]} />
+                    <Text style={[styles.roleOptionText, { color: isSelected ? roleColor : theme.text, fontWeight: isSelected ? 'bold' : 'normal' }]}>
+                      {role.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalBtns}>
+              <TouchableOpacity
+                onPress={() => setRoleModalVisible(false)}
+                style={[styles.modalBtn, styles.cancelBtn, { borderColor: theme.border }]}
+              >
+                <Text style={[styles.cancelBtnText, { color: theme.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveRole}
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+              >
+                <Text style={styles.saveBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <ConfirmModal
+        visible={alertVisible}
+        onClose={() => setAlertVisible(false)}
+        onConfirm={alertOnConfirm}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        isDestructive={alertIsDestructive}
+      />
     </View>
   );
 }
@@ -348,5 +440,80 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+    width: '100%',
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  roleOptionsContainer: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 20,
+  },
+  roleOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  roleOptionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  roleOptionText: {
+    fontSize: 13,
+  },
+  modalBtns: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  modalBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    borderWidth: 1,
+  },
+  cancelBtnText: {
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

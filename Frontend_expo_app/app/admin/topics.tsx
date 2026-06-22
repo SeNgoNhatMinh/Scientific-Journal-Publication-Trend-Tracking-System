@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   useColorScheme,
   FlatList,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -26,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 const STATUS_COLORS: Record<string, string> = {
   exploding: '#ef4444',
@@ -42,6 +42,32 @@ export default function AdminTopicsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
+
+  // Custom Alert / Confirm Modal state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'alert' | 'confirm'>('alert');
+  const [alertOnConfirm, setAlertOnConfirm] = useState<() => void>(() => {});
+  const [alertIsDestructive, setAlertIsDestructive] = useState(false);
+
+  const showCustomAlert = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('alert');
+    setAlertOnConfirm(() => {});
+    setAlertIsDestructive(false);
+    setAlertVisible(true);
+  };
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('confirm');
+    setAlertOnConfirm(() => onConfirm);
+    setAlertIsDestructive(isDestructive);
+    setAlertVisible(true);
+  };
 
   // Form Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -65,6 +91,10 @@ export default function AdminTopicsScreen() {
       setTopics(res.data.data || []);
     } catch (err) {
       console.error(err);
+      showCustomAlert(
+        'Network Error',
+        'Could not load topics. Please check that the server is running and accessible.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +135,7 @@ export default function AdminTopicsScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Validation Error', 'Topic Name is required');
+      showCustomAlert('Validation Error', 'Topic Name is required');
       return;
     }
 
@@ -136,34 +166,28 @@ export default function AdminTopicsScreen() {
         fetchTopics();
       }
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.message || 'Failed to save topic');
+      showCustomAlert('Error', e.response?.data?.message || 'Failed to save topic');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = (topicId: string, topicName: string) => {
-    Alert.alert(
+    showCustomConfirm(
       'Delete Topic',
       `Are you sure you want to permanently delete topic "${topicName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setActionId(topicId);
-            try {
-              await api.delete(`/topics/${topicId}`);
-              setTopics((prev) => prev.filter((t) => t._id !== topicId));
-            } catch (e: any) {
-              Alert.alert('Error', e.response?.data?.message || 'Failed to delete');
-            } finally {
-              setActionId(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setActionId(topicId);
+        try {
+          await api.delete(`/topics/${topicId}`);
+          setTopics((prev) => prev.filter((t) => t._id !== topicId));
+        } catch (e: any) {
+          showCustomAlert('Error', e.response?.data?.message || 'Failed to delete');
+        } finally {
+          setActionId(null);
+        }
+      },
+      true
     );
   };
 
@@ -434,6 +458,16 @@ export default function AdminTopicsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmModal
+        visible={alertVisible}
+        onClose={() => setAlertVisible(false)}
+        onConfirm={alertOnConfirm}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        isDestructive={alertIsDestructive}
+      />
     </View>
   );
 }

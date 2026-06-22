@@ -199,6 +199,17 @@ export default function AdminDashboardScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              onPress={() => router.push('/admin/corpus' as any)}
+              style={[styles.navCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <View style={styles.navCardLeft}>
+                <Database size={20} color={theme.primary} />
+                <Text style={[styles.navCardTitle, { color: theme.text }]}>Corpus Management</Text>
+              </View>
+              <ArrowRight size={18} color={theme.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               onPress={() => router.push('/admin/authors' as any)}
               style={[styles.navCard, { backgroundColor: theme.card, borderColor: theme.border }]}
             >
