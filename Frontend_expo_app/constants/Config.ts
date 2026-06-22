@@ -1,11 +1,26 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const RAILWAY_URL = 'https://scientific-journal-publication-trend-tracking-sy-production.up.railway.app';
+// ==========================================
+// CONFIGURATION OPTIONS FOR BACKEND TARGET
+// ==========================================
+
+// OPTION 1: Set this boolean to true to force using the production Railway URL.
+// Set to false to use the local backend / environment variables.
+const FORCE_PRODUCTION = true;
+
+// OPTION 2: Set your computer's local IP address here if testing on a physical device
+// and automatic IP detection fails (e.g. '192.168.1.15'). Leave empty '' to use auto-detection.
 const MANUAL_DEV_IP = '';
 
-// Dev mặc định dùng backend local. Set EXPO_PUBLIC_USE_LOCAL_BACKEND=false nếu muốn proxy Railway.
-const USE_LOCAL = process.env.EXPO_PUBLIC_USE_LOCAL_BACKEND !== 'true';
+// ==========================================
+// ENVIRONMENT VARIABLE FALLBACKS (.env)
+// ==========================================
+const RAILWAY_URL = 'https://scientific-journal-publication-trend-tracking-sy-production.up.railway.app';
+
+// Dev mặc định dùng backend local. Đặt EXPO_PUBLIC_USE_LOCAL_BACKEND=false trong .env
+// hoặc đặt FORCE_PRODUCTION = true ở trên nếu muốn kết nối Railway.
+const USE_LOCAL = !FORCE_PRODUCTION && process.env.EXPO_PUBLIC_USE_LOCAL_BACKEND !== 'false';
 
 const getLocalBackendTarget = () => {
   if (process.env.EXPO_PUBLIC_BACKEND_URL) {
