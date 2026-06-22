@@ -11,6 +11,7 @@ import {
   FlatList,
   Modal,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -22,6 +23,7 @@ import {
   Search,
   BookOpen,
   X,
+  Trash2,
 } from 'lucide-react-native';
 import Svg, { Line, Circle, Text as SvgText } from 'react-native-svg';
 import api from '../../lib/api';
@@ -46,6 +48,7 @@ export default function WorkspaceDetailsScreen() {
 
   const [activeTab, setActiveTab] = useState<'map' | 'papers' | 'notes'>('map');
   const [workspace, setWorkspace] = useState<any>(null);
+  const [role, setRole] = useState<string>('viewer');
   const [papers, setPapers] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
   const [graphNodes, setGraphNodes] = useState<any[]>([]);
@@ -71,6 +74,7 @@ export default function WorkspaceDetailsScreen() {
       // 1. Fetch details
       const wsRes = await api.get(`/workspaces/${id}`);
       setWorkspace(wsRes.data.workspace || wsRes.data);
+      if (wsRes.data.role) setRole(wsRes.data.role);
 
       // 2. Fetch papers
       const papersRes = await api.get(`/workspaces/${id}/papers`);
@@ -190,6 +194,28 @@ export default function WorkspaceDetailsScreen() {
     }
   };
 
+  const handleDeleteWorkspace = () => {
+    Alert.alert(
+      'Delete Workspace',
+      'Are you sure you want to delete this workspace? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/workspaces/${id}`);
+              router.push('/(tabs)/library');
+            } catch (err: any) {
+              Alert.alert('Error', err.response?.data?.message || 'Failed to delete workspace.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatAuthors = (authors: any[]) => {
     if (!authors || authors.length === 0) return 'Unknown Authors';
     if (typeof authors[0] === 'string') return authors.join(', ');
@@ -226,10 +252,17 @@ export default function WorkspaceDetailsScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header Info */}
       <View style={styles.headerInfo}>
-        <Text style={[styles.wsName, { color: theme.text }]}>{workspace?.name}</Text>
-        <Text style={[styles.wsDesc, { color: theme.muted }]}>
-          {workspace?.description || 'No description provided.'}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.wsName, { color: theme.text }]}>{workspace?.name}</Text>
+          <Text style={[styles.wsDesc, { color: theme.muted }]}>
+            {workspace?.description || 'No description provided.'}
+          </Text>
+        </View>
+        {role === 'owner' && (
+          <TouchableOpacity onPress={handleDeleteWorkspace} style={styles.deleteBtn}>
+            <Trash2 size={16} color={theme.destructive} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Tabs Selector */}
@@ -530,6 +563,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   wsName: {
     fontSize: 20,
@@ -538,6 +574,12 @@ const styles = StyleSheet.create({
   wsDesc: {
     fontSize: 12,
     marginTop: 2,
+  },
+  deleteBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#ff000010',
+    marginLeft: 10,
   },
   tabsRow: {
     flexDirection: 'row',

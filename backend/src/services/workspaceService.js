@@ -137,6 +137,23 @@ const createWorkspace = async (userId, { name, description, visibility = 'privat
   return workspace;
 };
 
+const deleteWorkspace = async (workspaceId, userId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'owner');
+  
+  const workspace = await Workspace.findById(workspaceId);
+  if (!workspace) throw createError('Workspace not found', 404);
+
+  // Hard delete workspace and cascade
+  await Workspace.findByIdAndDelete(workspaceId);
+  await WorkspaceMember.deleteMany({ workspaceId });
+  await WorkspacePaper.deleteMany({ workspaceId });
+  await WorkspaceCorpus.deleteMany({ workspaceId });
+  await WorkspaceNote.deleteMany({ workspaceId });
+  await WorkspaceAlert.deleteMany({ workspaceId });
+
+  return { success: true, message: 'Workspace deleted successfully' };
+};
+
 const listWorkspaces = async (userId, { page = 1, limit = 20 } = {}) => {
   const safeLimit = parseLimit(limit, 20, 100);
   const safePage = Math.max(parseInt(page, 10) || 1, 1);
@@ -644,4 +661,5 @@ module.exports = {
   getKeywordGraph,
   assertWorkspaceRole,
   assertPaperInWorkspace,
+  deleteWorkspace,
 };
