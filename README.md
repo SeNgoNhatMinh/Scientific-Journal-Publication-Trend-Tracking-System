@@ -14,6 +14,7 @@ Backend API hỗ trợ tìm kiếm bài báo học thuật (OpenAlex), thu thậ
 | SE184093 | Đặng Thanh Tú |
 | SE184217 | Trần Đình Phong |
 | SE182721 | Phạm Đức Thanh Phương |
+| SE       | Tô Thanh Hải |
 
 **Trường:** FPT University
 
