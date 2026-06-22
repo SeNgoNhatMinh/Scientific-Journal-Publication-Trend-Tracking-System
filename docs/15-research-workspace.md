@@ -14,7 +14,7 @@ Vì vậy hệ thống có 2 lớp trend:
 
 | Lớp trend | Dữ liệu | Câu hỏi trả lời |
 |---|---|---|
-| **Global trend** | OpenAlex, Semantic Scholar, Crossref, IEEE, Exa | Thế giới đang nghiên cứu gì? |
+| **Global trend** | OpenAlex, Semantic Scholar, Crossref, arXiv, IEEE, Exa | Thế giới đang nghiên cứu gì? |
 | **Workspace trend** | Paper, corpus, note và keyword trong workspace | Nhóm tôi đang nghiên cứu gì, thiếu gì, nên đi hướng nào tiếp? |
 
 ---

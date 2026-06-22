@@ -32,6 +32,7 @@ const SOURCE_META: Record<string, { label: string; cls: string }> = {
   openalex:        { label: "OpenAlex",          cls: "source-openalex" },
   semanticscholar: { label: "Semantic Scholar",  cls: "source-semanticscholar" },
   crossref:        { label: "Crossref",          cls: "source-crossref" },
+  arxiv:           { label: "arXiv",             cls: "source-arxiv" },
   ieee:            { label: "IEEE Xplore",       cls: "source-ieee" },
   exa:             { label: "Exa Research",      cls: "source-exa" },
 }
@@ -64,7 +65,7 @@ export default function SearchPage() {
     providerMessage?: string
   ) => {
     if (status === 429 && selectedSource === "semanticscholar") {
-      return "Semantic Scholar is rate-limiting requests. Wait 1-2 minutes or switch to OpenAlex for a more stable demo."
+      return "Semantic Scholar allows 1 request per second for this key. Wait a moment, search again, or switch to OpenAlex for a more stable demo."
     }
     if (status === 403 && selectedSource === "ieee") {
       return providerMessage || "IEEE Xplore rejected this key/account. Activate the IEEE developer account/key before using this source."
@@ -150,6 +151,7 @@ export default function SearchPage() {
       if (paper.source === "openalex") externalIds.openalex = paper.id
       if (paper.source === "semanticscholar") externalIds.semanticScholar = paper.id
       if (paper.source === "crossref") externalIds.crossref = paper.id
+      if (paper.source === "arxiv") externalIds.arxiv = paper.id
       if (paper.source === "ieee") externalIds.ieee = paper.id
       if (paper.source === "exa") externalIds.exa = paper.id
     }
@@ -278,6 +280,7 @@ export default function SearchPage() {
                     <option value="openalex">OpenAlex</option>
                     <option value="semanticscholar">Semantic Scholar</option>
                     <option value="crossref">Crossref</option>
+                    <option value="arxiv">arXiv</option>
                     <option value="ieee">IEEE Xplore</option>
                     <option value="exa">Exa Research</option>
                   </select>

@@ -31,7 +31,7 @@ Câu mô tả ngắn để thuyết trình:
 
 | Use case | Actor | API chính | Ý nghĩa nghiệp vụ |
 |---|---|---|---|
-| Tìm paper live | Khách / Người dùng | `GET /sources/search` | Khám phá nhanh paper từ OpenAlex, Semantic Scholar, Crossref, IEEE, Exa |
+| Tìm paper live | Khách / Người dùng | `GET /sources/search` | Khám phá nhanh paper từ OpenAlex, Semantic Scholar, Crossref, arXiv, IEEE, Exa |
 | Tạo corpus | Khách / Người dùng | `POST /corpus/runs` | Lưu snapshot paper theo keyword để phân tích có bằng chứng |
 | Poll corpus | Khách / Người dùng | `GET /corpus/runs/{id}` | Theo dõi trạng thái ingest/analyze cho tới khi hoàn tất |
 | Xem paper trong corpus | Khách / Người dùng | `GET /corpus/runs/{id}/papers` | Xem các bài đã được hệ thống thu thập và lưu vào MongoDB |
