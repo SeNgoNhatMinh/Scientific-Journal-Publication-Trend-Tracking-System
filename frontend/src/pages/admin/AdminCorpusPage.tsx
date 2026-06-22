@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   RefreshCw, StopCircle, Trash2, Loader2, AlertCircle, Database,
   CheckCircle2, Cpu, FileText, Clock, Search
 } from "lucide-react"
 import api from "@/lib/api"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 const statusConfig: Record<string, { label: string; cls: string; dot: string; spinner?: boolean }> = {
   completed: {
@@ -63,6 +63,18 @@ export default function AdminCorpusPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+    variant?: "default" | "destructive"
+  }>({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: () => {}
+  })
 
   const fetchRuns = async () => {
     setIsLoading(true)
@@ -79,6 +91,53 @@ export default function AdminCorpusPage() {
   }
 
   useEffect(() => { fetchRuns() }, [])
+
+  const handleStopRun = (runId: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: "Stop Ingestion",
+      description: "Are you sure you want to stop this corpus ingestion run?",
+      onConfirm: async () => {
+        try {
+          const res = await api.post(`/corpus/runs/${runId}/stop`)
+          if (res.data.success) {
+            setRuns(prev =>
+              prev.map(r =>
+                (r._id === runId || r.id === runId)
+                  ? { ...r, status: "failed", errorMessage: "Stopped by administrator" }
+                  : r
+              )
+            )
+          }
+        } catch (err: any) {
+          setError(err.response?.data?.message || err.message || "Failed to stop corpus run")
+        }
+      }
+    })
+  }
+
+  const handleDeleteRun = (runId: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: "Delete Corpus Run",
+      description: "Are you sure you want to permanently delete this corpus run and all of its papers and trend data?",
+      variant: "destructive",
+      onConfirm: async () => {
+        setDeletingId(runId)
+        setError(null)
+        try {
+          const res = await api.delete(`/corpus/runs/${runId}`)
+          if (res.data.success) {
+            setRuns(prev => prev.filter(r => r._id !== runId && r.id !== runId))
+          }
+        } catch (err: any) {
+          setError(err.response?.data?.message || err.message || "Failed to delete corpus run")
+        } finally {
+          setDeletingId(null)
+        }
+      }
+    })
+  }
 
   const filtered = runs.filter(r =>
     !search || (r.keyword || r.query || "").toLowerCase().includes(search.toLowerCase())
@@ -246,6 +305,7 @@ export default function AdminCorpusPage() {
                             size="icon"
                             className="h-8 w-8 text-orange-500 hover:bg-orange-500/10 rounded-lg"
                             title="Stop Run"
+                            onClick={() => handleStopRun(run._id || run.id)}
                           >
                             <StopCircle className="h-4 w-4" />
                           </Button>
@@ -256,6 +316,7 @@ export default function AdminCorpusPage() {
                           className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg"
                           title="Delete"
                           disabled={deletingId === (run._id || run.id)}
+                          onClick={() => handleDeleteRun(run._id || run.id)}
                         >
                           {deletingId === (run._id || run.id)
                             ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -270,6 +331,15 @@ export default function AdminCorpusPage() {
           </Table>
         )}
       </motion.div>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

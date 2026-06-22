@@ -14,6 +14,7 @@ import {
   Search, RefreshCw, AlertCircle, Plus, Edit2, Trash2, Loader2, BookOpen, Activity, ChevronLeft, ChevronRight, Check, X, Rss
 } from "lucide-react"
 import api from "@/lib/api"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 type JournalItem = {
   _id: string
@@ -62,6 +63,18 @@ export default function AdminJournalsPage() {
     fieldDomain: "",
     isTracked: false,
     source: "openalex"
+  })
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+    variant?: "default" | "destructive"
+  }>({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: () => {}
   })
 
   const limit = 10
@@ -175,18 +188,25 @@ export default function AdminJournalsPage() {
     }
   }
 
-  const handleDelete = async (journalId: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete journal "${title}"?`)) return
-    setError(null)
-    try {
-      const res = await api.delete(`/journals/${journalId}`)
-      if (res.data.success) {
-        setJournals(prev => prev.filter(j => j._id !== journalId))
-        setTotal(t => t - 1)
+  const handleDelete = (journalId: string, title: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: "Delete Journal",
+      description: `Are you sure you want to permanently delete journal "${title}"?`,
+      variant: "destructive",
+      onConfirm: async () => {
+        setError(null)
+        try {
+          const res = await api.delete(`/journals/${journalId}`)
+          if (res.data.success) {
+            setJournals(prev => prev.filter(j => j._id !== journalId))
+            setTotal(t => t - 1)
+          }
+        } catch (err: any) {
+          setError(err.response?.data?.message || "Failed to delete journal")
+        }
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to delete journal")
-    }
+    })
   }
 
   const handleToggleTracked = async (journal: JournalItem) => {
@@ -198,7 +218,7 @@ export default function AdminJournalsPage() {
         setJournals(prev => prev.map(j => j._id === journal._id ? { ...j, isTracked: res.data.data.isTracked } : j))
       }
     } catch (err: any) {
-      alert("Failed to toggle tracking status")
+      setError("Failed to toggle tracking status")
     }
   }
 
@@ -347,7 +367,7 @@ export default function AdminJournalsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {journals.map((journal, idx) => (
+                {journals.map((journal) => (
                   <TableRow
                     key={journal._id}
                     className="border-border/20 hover:bg-muted/20 transition-colors group"
@@ -634,6 +654,15 @@ export default function AdminJournalsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

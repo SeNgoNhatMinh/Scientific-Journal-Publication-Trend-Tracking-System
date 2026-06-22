@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   useColorScheme,
   FlatList,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 const CATEGORY_COLORS: Record<string, string> = {
   domain: '#3b82f6',
@@ -44,6 +44,32 @@ export default function AdminKeywordsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionId, setActionId] = useState<string | null>(null);
+
+  // Custom Alert / Confirm Modal state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'alert' | 'confirm'>('alert');
+  const [alertOnConfirm, setAlertOnConfirm] = useState<() => void>(() => {});
+  const [alertIsDestructive, setAlertIsDestructive] = useState(false);
+
+  const showCustomAlert = (title: string, message: string) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('alert');
+    setAlertOnConfirm(() => {});
+    setAlertIsDestructive(false);
+    setAlertVisible(true);
+  };
+
+  const showCustomConfirm = (title: string, message: string, onConfirm: () => void, isDestructive = false) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType('confirm');
+    setAlertOnConfirm(() => onConfirm);
+    setAlertIsDestructive(isDestructive);
+    setAlertVisible(true);
+  };
 
   // Form Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -66,6 +92,10 @@ export default function AdminKeywordsScreen() {
       setKeywords(res.data.data || []);
     } catch (err) {
       console.error(err);
+      showCustomAlert(
+        'Network Error',
+        'Could not load keywords. Please check that the server is running and accessible.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +134,7 @@ export default function AdminKeywordsScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Validation Error', 'Keyword Name is required');
+      showCustomAlert('Validation Error', 'Keyword Name is required');
       return;
     }
 
@@ -134,34 +164,28 @@ export default function AdminKeywordsScreen() {
         fetchKeywords();
       }
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.message || 'Failed to save keyword');
+      showCustomAlert('Error', e.response?.data?.message || 'Failed to save keyword');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDelete = (kwId: string, kwName: string) => {
-    Alert.alert(
+    showCustomConfirm(
       'Delete Keyword',
       `Are you sure you want to permanently delete "#${kwName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setActionId(kwId);
-            try {
-              await api.delete(`/keywords/${kwId}`);
-              setKeywords((prev) => prev.filter((k) => k._id !== kwId));
-            } catch (e: any) {
-              Alert.alert('Error', e.response?.data?.message || 'Failed to delete');
-            } finally {
-              setActionId(null);
-            }
-          },
-        },
-      ]
+      async () => {
+        setActionId(kwId);
+        try {
+          await api.delete(`/keywords/${kwId}`);
+          setKeywords((prev) => prev.filter((k) => k._id !== kwId));
+        } catch (e: any) {
+          showCustomAlert('Error', e.response?.data?.message || 'Failed to delete');
+        } finally {
+          setActionId(null);
+        }
+      },
+      true
     );
   };
 
@@ -422,6 +446,16 @@ export default function AdminKeywordsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmModal
+        visible={alertVisible}
+        onClose={() => setAlertVisible(false)}
+        onConfirm={alertOnConfirm}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        isDestructive={alertIsDestructive}
+      />
     </View>
   );
 }

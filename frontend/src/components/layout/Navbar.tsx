@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Search, Bell, User, BookOpen, TrendingUp, Brain, Database, Library, LayoutDashboard, X, Menu, Sun, Moon, Shield } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,

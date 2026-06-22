@@ -38,7 +38,6 @@ function ProgressBar({ pct, color, warn }: { pct: number; color: string; warn: b
 type ServiceStatus = "ok" | "error" | "loading"
 
 export default function AdminMonitoringPage() {
-  const [aiHealth, setAiHealth] = useState<any>(null)
   const [aiStatus, setAiStatus] = useState<ServiceStatus>("loading")
   const [backendStatus, setBackendStatus] = useState<ServiceStatus>("loading")
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
@@ -71,14 +70,12 @@ export default function AdminMonitoringPage() {
     // AI health ở /api/v1/ai/health
     api.get("/ai/health")
       .then(r => {
-        setAiHealth(r.data)
         // Nếu API trả về success=true nhưng status='unavailable' (catch trong controller) thì vẫn là error
         const isOk = r.data?.status === "ok" || (r.data?.success && r.data?.status !== "unavailable")
         setAiStatus(isOk ? "ok" : "error")
       })
       .catch(() => {
         setAiStatus("error")
-        setAiHealth(null)
       })
       .finally(() => {
         setLastChecked(new Date())

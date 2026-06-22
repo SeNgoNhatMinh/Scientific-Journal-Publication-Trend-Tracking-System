@@ -157,7 +157,7 @@ export default function AuthPage() {
                 </div>
 
                 <div className="relative">
-                  <Select value={role} onValueChange={setRole}>
+                  <Select value={role} onValueChange={(val) => val && setRole(val)}>
                     <SelectTrigger className="capitalize h-11 bg-muted/30 border-border/50 rounded-xl focus-visible:border-primary/50">
                       <SelectValue placeholder="Select your role" />
                     </SelectTrigger>

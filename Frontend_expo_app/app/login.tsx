@@ -66,9 +66,11 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(
-        err.response?.data?.message || 'Authentication failed. Please check your credentials.'
-      );
+      if (err.message === 'Network Error' || !err.response) {
+        setError('Network error. Cannot connect to backend server. Please verify the server is running and accessible.');
+      } else {
+        setError(err.response.data?.message || 'Authentication failed. Please check your credentials.');
+      }
     } finally {
       setIsLoading(false);
     }
