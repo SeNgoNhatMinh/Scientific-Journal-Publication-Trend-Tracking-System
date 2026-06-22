@@ -51,7 +51,8 @@ export default function SearchPage() {
   const [papers, setPapers] = useState<Paper[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
-  const [savingPaperId, setSavingPaperId] = useState<string | null>(null)
+  const [bookmarkingId, setBookmarkingId] = useState<string | null>(null)
+  const [openingId, setOpeningId] = useState<string | null>(null)
   const [savedPaperIds, setSavedPaperIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState("")
 
@@ -177,36 +178,41 @@ export default function SearchPage() {
   const ensurePaperInDatabase = async (paper: Paper) => {
     if (paper.id && isMongoObjectId(paper.id)) return paper.id
     if (!localStorage.getItem("token")) { navigate("/login"); return null }
-    setSavingPaperId(paper.id)
     try {
       const res = await api.post("/papers", { paper: buildSavablePaper(paper) })
-      const databasePaperId = res.data.paper?._id || res.data.paper?.id || null
-      if (databasePaperId) setSavedPaperIds((current) => new Set(current).add(paper.id))
-      return databasePaperId
+      return res.data.paper?._id || res.data.paper?.id || null
     } catch (err: any) {
       if (err.response?.status === 401) { navigate("/login"); return null }
       if (err.response?.status === 409 && err.response?.data?.paper?._id) return err.response.data.paper._id
       setError(err.response?.data?.message || "Could not save this paper before opening details.")
       return null
-    } finally {
-      setSavingPaperId(null)
     }
   }
 
   const openPaperDetails = async (paper: Paper) => {
+    setOpeningId(paper.id)
     const databasePaperId = await ensurePaperInDatabase(paper)
+    setOpeningId(null)
     if (databasePaperId) navigate(`/papers/${databasePaperId}`)
   }
 
   const handleBookmark = async (paper: Paper) => {
+    setBookmarkingId(paper.id)
     try {
       const databasePaperId = await ensurePaperInDatabase(paper)
       if (!databasePaperId) return
       await api.post(`/papers/${databasePaperId}/bookmark`)
-      setSavedPaperIds((current) => new Set(current).add(paper.id))
+      setSavedPaperIds((current) => {
+        const next = new Set(current)
+        if (next.has(paper.id)) next.delete(paper.id)
+        else next.add(paper.id)
+        return next
+      })
     } catch (err: any) {
       if (err.response?.status === 401) navigate("/login")
       else setError(err.response?.data?.message || "Failed to save this paper.")
+    } finally {
+      setBookmarkingId(null)
     }
   }
 
@@ -429,10 +435,10 @@ export default function SearchPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleBookmark(paper)}
-                              disabled={savingPaperId === paper.id}
+                              disabled={bookmarkingId === paper.id}
                               className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-primary"
                             >
-                              {savingPaperId === paper.id ? (
+                              {bookmarkingId === paper.id ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
                                 <Bookmark className="h-3.5 w-3.5" />
@@ -452,8 +458,9 @@ export default function SearchPage() {
                             size="sm"
                             className="h-8 px-3 text-xs text-primary hover:bg-primary/10"
                             onClick={() => openPaperDetails(paper)}
-                            disabled={savingPaperId === paper.id}
+                            disabled={openingId === paper.id}
                           >
+                            {openingId === paper.id ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
                             View Details →
                           </Button>
                         </div>

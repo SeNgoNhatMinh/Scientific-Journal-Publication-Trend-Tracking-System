@@ -95,6 +95,31 @@ router.get('/:workspaceId', workspaceController.getWorkspace);
 
 /**
  * @swagger
+ * /workspaces/{workspaceId}:
+ *   delete:
+ *     tags: [Workspaces]
+ *     summary: Xóa workspace (Chỉ dành cho owner)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Không có quyền owner
+ *       404:
+ *         description: Workspace not found
+ */
+router.delete('/:workspaceId', workspaceController.deleteWorkspace);
+
+/**
+ * @swagger
  * /workspaces/{workspaceId}/members:
  *   post:
  *     tags: [Workspaces]
