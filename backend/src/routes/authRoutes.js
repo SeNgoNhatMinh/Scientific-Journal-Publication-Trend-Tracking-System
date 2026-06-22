@@ -124,4 +124,52 @@ router.put('/me', protect, authController.updateProfile);
  */
 router.put('/me/password', protect, authController.updatePassword);
 
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Gửi email reset mật khẩu
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, example: "user@example.com" }
+ *     responses:
+ *       200:
+ *         description: Email sent (or silently skipped if not found)
+ */
+router.post('/forgot-password', authController.forgotPassword);
+
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Đặt mật khẩu mới bằng token từ email
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, email, newPassword]
+ *             properties:
+ *               token: { type: string, description: "Token từ URL email" }
+ *               email: { type: string, example: "user@example.com" }
+ *               newPassword: { type: string, example: "newpass456" }
+ *     responses:
+ *       200:
+ *         description: Password reset successfully + auto login
+ *       400:
+ *         description: Invalid or expired token
+ */
+router.post('/reset-password', authController.resetPassword);
+
 module.exports = router;

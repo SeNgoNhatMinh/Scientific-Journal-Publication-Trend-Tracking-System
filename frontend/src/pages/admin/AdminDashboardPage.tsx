@@ -3,7 +3,7 @@ import { motion } from "framer-motion"
 import axios from "axios"
 import {
   Users, Database, FileText, Activity, TrendingUp, TrendingDown,
-  Clock, ArrowUpRight, Server, CheckCircle2, Bell, Loader2
+  Clock, ArrowUpRight, Server, CheckCircle2, Bell, Loader2, BookOpen, Tag, Compass
 } from "lucide-react"
 import api from "@/lib/api"
 
@@ -72,6 +72,50 @@ const STAT_CONFIG = [
     border: "border-orange-500/20",
     glow: "shadow-orange-500/10",
   },
+  {
+    key: "authors",
+    label: "Total Authors",
+    suffix: "",
+    trendLabel: "academic authors",
+    icon: Users,
+    gradient: "from-purple-500/20 via-indigo-500/10 to-transparent",
+    iconBg: "from-purple-500 to-indigo-600",
+    border: "border-purple-500/20",
+    glow: "shadow-purple-500/10",
+  },
+  {
+    key: "journals",
+    label: "Total Journals",
+    suffix: "",
+    trendLabel: "registered venues",
+    icon: BookOpen,
+    gradient: "from-emerald-500/20 via-green-500/10 to-transparent",
+    iconBg: "from-emerald-500 to-green-600",
+    border: "border-emerald-500/20",
+    glow: "shadow-emerald-500/10",
+  },
+  {
+    key: "keywords",
+    label: "Total Keywords",
+    suffix: "",
+    trendLabel: "trend keywords",
+    icon: Tag,
+    gradient: "from-pink-500/20 via-rose-500/10 to-transparent",
+    iconBg: "from-pink-500 to-rose-600",
+    border: "border-pink-500/20",
+    glow: "shadow-pink-500/10",
+  },
+  {
+    key: "topics",
+    label: "Total Topics",
+    suffix: "",
+    trendLabel: "AI-clustered topics",
+    icon: Compass,
+    gradient: "from-cyan-500/20 via-blue-500/10 to-transparent",
+    iconBg: "from-cyan-500 to-blue-600",
+    border: "border-cyan-500/20",
+    glow: "shadow-cyan-500/10",
+  },
 ]
 
 // ─── Notification → activity icon mapping ────────────────────────────────────
@@ -101,7 +145,7 @@ function StatCard({ cfg, value, index }: { cfg: typeof STAT_CONFIG[0]; value: nu
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08, duration: 0.5, ease: "easeOut" }}
+      transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
       className={`group relative overflow-hidden rounded-2xl border ${cfg.border} bg-card/60 backdrop-blur-md p-5 shadow-lg ${cfg.glow} hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5`}
     >
       <div className={`absolute inset-0 bg-gradient-to-br ${cfg.gradient} pointer-events-none`} />
@@ -123,7 +167,7 @@ function StatCard({ cfg, value, index }: { cfg: typeof STAT_CONFIG[0]; value: nu
 
 export default function AdminDashboardPage() {
   // ── State ──
-  const [stats, setStats] = useState({ users: 0, corpus: 0, papers: 0, activeCorpus: 0 })
+  const [stats, setStats] = useState({ users: 0, corpus: 0, papers: 0, activeCorpus: 0, authors: 0, journals: 0, keywords: 0, topics: 0 })
   const [apiHealth, setApiHealth] = useState<"ok" | "error" | "loading">("loading")
 
   // Recent activity from notifications API
@@ -160,14 +204,30 @@ export default function AdminDashboardPage() {
       })
       .catch(() => {})
 
-    // 3. API health — /health nằm ở root, không phải /api/v1/health
-    //    Dùng axios trực tiếp (không qua api instance có baseURL /api/v1)
+    // 3. API health
     const backendRoot = (import.meta.env.VITE_API_BASE_URL
       ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, "")
       : "")
     axios.get(`${backendRoot}/health`)
       .then(() => setApiHealth("ok"))
       .catch(() => setApiHealth("error"))
+
+    // 4. Authors, Journals, Keywords, Topics total count
+    api.get("/authors", { params: { limit: 1 } })
+      .then(r => setStats(s => ({ ...s, authors: r.data.total ?? 0 })))
+      .catch(() => {})
+
+    api.get("/journals", { params: { limit: 1 } })
+      .then(r => setStats(s => ({ ...s, journals: r.data.total ?? 0 })))
+      .catch(() => {})
+
+    api.get("/keywords", { params: { limit: 1 } })
+      .then(r => setStats(s => ({ ...s, keywords: r.data.total ?? 0 })))
+      .catch(() => {})
+
+    api.get("/topics", { params: { limit: 1 } })
+      .then(r => setStats(s => ({ ...s, topics: r.data.total ?? 0 })))
+      .catch(() => {})
 
     // 5. Recent activity — from notifications (admin sees all system events)
     api.get("/notifications", { params: { limit: 8 } })
@@ -193,6 +253,10 @@ export default function AdminDashboardPage() {
     corpus: stats.corpus,
     papers: stats.papers,
     activeCorpus: stats.activeCorpus,
+    authors: stats.authors,
+    journals: stats.journals,
+    keywords: stats.keywords,
+    topics: stats.topics,
   }
 
   // Compute max paperCount for relative progress bars

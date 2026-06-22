@@ -5,10 +5,11 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import {
-  Shield, Lock, Trash2, Activity, Search, RefreshCw, AlertCircle,
+  Lock, Trash2, Activity, Search, RefreshCw, AlertCircle,
   Users, UserCheck, UserX, Crown, ChevronDown
 } from "lucide-react"
 import api from "@/lib/api"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 type UserItem = {
   _id: string
@@ -50,6 +51,18 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState("")
   const [total, setTotal] = useState(0)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+    variant?: "default" | "destructive"
+  }>({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: () => {}
+  })
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true)
@@ -77,13 +90,14 @@ export default function AdminUsersPage() {
 
   const handleToggleStatus = async (userId: string) => {
     setActionLoading(userId + "-status")
+    setError(null)
     try {
       const res = await api.put(`/users/${userId}/status`)
       if (res.data.success) {
         setUsers(prev => prev.map(u => u._id === userId ? { ...u, isActive: res.data.data.isActive } : u))
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed")
+      setError(err.response?.data?.message || "Failed to change user status")
     } finally {
       setActionLoading(null)
     }
@@ -91,32 +105,41 @@ export default function AdminUsersPage() {
 
   const handleChangeRole = async (userId: string, newRole: string) => {
     setActionLoading(userId + "-role")
+    setError(null)
     try {
       const res = await api.put(`/users/${userId}/role`, { role: newRole })
       if (res.data.success) {
         setUsers(prev => prev.map(u => u._id === userId ? { ...u, role: res.data.data.role } : u))
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed")
+      setError(err.response?.data?.message || "Failed to update user role")
     } finally {
       setActionLoading(null)
     }
   }
 
-  const handleDelete = async (userId: string, userName: string) => {
-    if (!confirm(`Delete "${userName}"? This cannot be undone.`)) return
-    setActionLoading(userId + "-delete")
-    try {
-      const res = await api.delete(`/users/${userId}`)
-      if (res.data.success) {
-        setUsers(prev => prev.filter(u => u._id !== userId))
-        setTotal(t => t - 1)
+  const handleDelete = (userId: string, userName: string) => {
+    setError(null)
+    setConfirmState({
+      isOpen: true,
+      title: "Delete User",
+      description: `Are you sure you want to delete "${userName}"? This cannot be undone.`,
+      variant: "destructive",
+      onConfirm: async () => {
+        setActionLoading(userId + "-delete")
+        try {
+          const res = await api.delete(`/users/${userId}`)
+          if (res.data.success) {
+            setUsers(prev => prev.filter(u => u._id !== userId))
+            setTotal(t => t - 1)
+          }
+        } catch (err: any) {
+          setError(err.response?.data?.message || "Failed to delete user")
+        } finally {
+          setActionLoading(null)
+        }
       }
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed")
-    } finally {
-      setActionLoading(null)
-    }
+    })
   }
 
   const activeCount = users.filter(u => u.isActive).length
@@ -272,7 +295,7 @@ export default function AdminUsersPage() {
                             value={user.role}
                             disabled={actionLoading === user._id + "-role"}
                             onChange={e => handleChangeRole(user._id, e.target.value)}
-                            className={`text-[11px] font-semibold pl-2 pr-6 py-1 rounded-full border appearance-none cursor-pointer focus:outline-none bg-transparent ${rCfg.cls}`}
+                            className={`capitalize text-[11px] font-semibold pl-2 pr-6 py-1 rounded-full border appearance-none cursor-pointer focus:outline-none bg-transparent ${rCfg.cls}`}
                           >
                             {ROLE_OPTIONS.map(r => (
                               <option key={r} value={r} className="bg-background text-foreground">
@@ -346,6 +369,15 @@ export default function AdminUsersPage() {
           </div>
         )}
       </motion.div>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        onConfirm={confirmState.onConfirm}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

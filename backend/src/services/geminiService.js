@@ -3,7 +3,7 @@ const envConfig = require('../config/env');
 
 // Dùng v1 (không phải v1beta) + model thực sự tồn tại
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1/models';
-const MODELS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+const MODELS = ['gemini-3.1-flash-lite', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
 
 const callGemini = async (model, prompt, apiKey) => {
   const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
@@ -63,7 +63,7 @@ Output:`;
       const status = err.response?.status;
       const errMsg = err.response?.data?.error?.message || err.message;
       console.error(`[gemini] ${model} failed (${status}):`, errMsg);
-      if (status && status !== 404) break; // key lỗi → dừng hẳn
+      if (status === 400 || status === 401 || status === 403) break; // Lỗi xác thực hoặc request sai -> dừng hẳn
     }
   }
   throw lastError || new Error('All Gemini models failed');

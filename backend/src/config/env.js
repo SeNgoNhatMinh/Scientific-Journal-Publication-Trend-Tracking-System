@@ -35,6 +35,7 @@ const envConfig = {
   SEMANTIC_SCHOLAR_API_KEY: process.env.SEMANTIC_SCHOLAR_API_KEY || '',
   CROSSREF_API_URL: process.env.CROSSREF_API_URL || 'https://api.crossref.org',
   CROSSREF_MAILTO: process.env.CROSSREF_MAILTO || 'youremail@gmail.com',
+  ARXIV_API_URL: process.env.ARXIV_API_URL || 'http://export.arxiv.org',
   IEEE_API_URL: process.env.IEEE_API_URL || 'https://ieeexploreapi.ieee.org',
   IEEE_API_KEY: process.env.IEEE_API_KEY || '',
   EXA_API_URL: process.env.EXA_API_URL || 'https://api.exa.ai',
@@ -55,6 +56,18 @@ const envConfig = {
   // Validation
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
+
+  // Email (Forgot Password)
+  EMAIL_FROM: process.env.EMAIL_FROM || '',
+  EMAIL_PASS: process.env.EMAIL_PASS || '',
+  SMTP_HOST: process.env.SMTP_HOST || '',
+  SMTP_PORT: process.env.SMTP_PORT || '587',
+  SMTP_SECURE: process.env.SMTP_SECURE || 'false',
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
+
+  // Frontend client URL (for building reset links)
+  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
 };
 
 // Validate required environment variables

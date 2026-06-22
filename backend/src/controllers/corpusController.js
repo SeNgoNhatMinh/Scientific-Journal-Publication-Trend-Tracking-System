@@ -107,6 +107,30 @@ const getMyTrackedRuns = async (req, res, next) => {
   }
 };
 
+const stopRun = async (req, res, next) => {
+  try {
+    const run = await corpusService.stopRun(req.params.runId);
+    if (!run) {
+      return res.status(404).json({ success: false, message: 'Analysis run not found' });
+    }
+    res.status(200).json({ success: true, message: 'Analysis run stopped successfully', run });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteRun = async (req, res, next) => {
+  try {
+    const run = await corpusService.deleteRun(req.params.runId);
+    if (!run) {
+      return res.status(404).json({ success: false, message: 'Analysis run not found' });
+    }
+    res.status(200).json({ success: true, message: 'Analysis run deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createRun,
   listRuns,
@@ -114,4 +138,6 @@ module.exports = {
   getRunPapers,
   followRun,
   getMyTrackedRuns,
+  stopRun,
+  deleteRun,
 };

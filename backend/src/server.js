@@ -7,6 +7,7 @@ const os = require('os');
 const path = require('path');
 
 const connectDB = require('./config/database');
+const { getDBStatus } = require('./config/database');
 const envConfig = require('./config/env');
 const swaggerSpec = require('./swagger/swaggerConfig');
 const errorHandler = require('./middlewares/errorHandler');
@@ -22,6 +23,10 @@ const corpusRoutes = require('./routes/corpusRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const workspaceRoutes = require('./routes/workspaceRoutes');
 const userRoutes = require('./routes/userRoutes');
+const authorRoutes = require('./routes/authorRoutes');
+const journalRoutes = require('./routes/journalRoutes');
+const keywordRoutes = require('./routes/keywordRoutes');
+const topicRoutes = require('./routes/topicRoutes');
 
 const app = express();
 
@@ -63,10 +68,16 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
  *         description: API is healthy
  */
 app.get('/health', (req, res) => {
+  const db = getDBStatus();
+  const dbStateLabel = ['disconnected', 'connected', 'connecting', 'disconnecting'][db.readyState] || 'unknown';
   res.json({
     success: true,
     message: 'API is running',
     timestamp: new Date(),
+    database: {
+      status: dbStateLabel,
+      connected: db.isConnected,
+    },
   });
 });
 
@@ -82,6 +93,10 @@ app.use(`${apiPrefix}/corpus`, corpusRoutes);
 app.use(`${apiPrefix}/notifications`, notificationRoutes);
 app.use(`${apiPrefix}/workspaces`, workspaceRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
+app.use(`${apiPrefix}/authors`, authorRoutes);
+app.use(`${apiPrefix}/journals`, journalRoutes);
+app.use(`${apiPrefix}/keywords`, keywordRoutes);
+app.use(`${apiPrefix}/topics`, topicRoutes);
 
 // 404 handler
 app.use((req, res) => {

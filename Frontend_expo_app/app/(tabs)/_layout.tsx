@@ -1,12 +1,19 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { useColorScheme, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Search, TrendingUp, Brain, Library } from 'lucide-react-native';
 import { Colors, Fonts } from '../../constants/theme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme || 'dark'];
+  const insets = useSafeAreaInsets();
+
+  // Tính toán paddingBottom và height dựa trên safe area insets
+  const bottomInset = insets.bottom;
+  const tabBarPaddingBottom = Platform.OS === 'ios' ? bottomInset : Math.max(bottomInset, 8);
+  const tabBarHeight = Platform.OS === 'ios' ? 50 + bottomInset : 56 + bottomInset;
 
   return (
     <Tabs
@@ -22,8 +29,8 @@ export default function TabLayout() {
           shadowOpacity: colorScheme === 'dark' ? 0.25 : 0.08,
           shadowOffset: { width: 0, height: -3 },
           shadowRadius: 8,
-          height: Platform.OS === 'ios' ? 88 : 66,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 12,
+          height: tabBarHeight,
+          paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
         },
         tabBarLabelStyle: {

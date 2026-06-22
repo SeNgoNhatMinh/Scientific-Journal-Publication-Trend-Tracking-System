@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Search as SearchIcon,
@@ -39,6 +40,7 @@ export default function ExploreScreen() {
   const searchParams = useLocalSearchParams();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const initialKeyword = (searchParams.searchKeyword as string) || '';
   const [keyword, setKeyword] = useState(initialKeyword);
@@ -204,7 +206,7 @@ export default function ExploreScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header & Search Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <SearchIcon size={18} color={theme.icon} style={styles.searchIcon} />
           <TextInput
@@ -454,7 +456,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 12,
     zIndex: 10,
   },

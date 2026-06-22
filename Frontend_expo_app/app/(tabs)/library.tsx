@@ -10,9 +10,9 @@ import {
   useColorScheme,
   FlatList,
   Modal,
-  Platform,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Library as LibraryIcon,
@@ -41,10 +41,21 @@ export default function LibraryScreen() {
   const router = useRouter();
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
-  const [activeSegment, setActiveSegment] = useState<'bookmarks' | 'workspaces'>('bookmarks');
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+
+  const [activeSegment, setActiveSegment] = useState<'bookmarks' | 'workspaces'>(
+    tab === 'workspaces' ? 'workspaces' : 'bookmarks'
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Sync segment when arriving with tab param
+  useEffect(() => {
+    if (tab === 'workspaces') setActiveSegment('workspaces');
+    else if (tab === 'bookmarks') setActiveSegment('bookmarks');
+  }, [tab]);
 
   // Bookmarks State
   const [bookmarks, setBookmarks] = useState<any[]>([]);
@@ -131,7 +142,7 @@ export default function LibraryScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header with segment picker */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={styles.titleRow}>
           <LibraryIcon size={24} color={theme.primary} />
           <Text style={[styles.title, { color: theme.text }]}>My Library</Text>
@@ -380,7 +391,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 12,
   },
   titleRow: {

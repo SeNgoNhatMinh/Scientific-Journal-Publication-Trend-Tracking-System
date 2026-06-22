@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { User, Mail, Shield, Settings, Camera, BookMarked, Activity, Key, LogOut, Check, AlertCircle } from "lucide-react"
+import { User, Mail, Settings, Camera, BookMarked, Activity, Key, Check, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -165,7 +165,7 @@ export default function ProfilePage() {
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-2 text-muted-foreground">
               <span className="flex items-center gap-1.5 font-medium"><Mail className="h-4 w-4" /> {user.email}</span>
               <span className="hidden md:inline text-border/50">•</span>
-              <Badge variant="outline" className={`uppercase tracking-wider border text-[10px] sm:text-xs ${roleColor}`}>
+              <Badge variant="outline" className={`capitalize tracking-wider border text-[10px] sm:text-xs ${roleColor}`}>
                 {user.role}
               </Badge>
             </div>

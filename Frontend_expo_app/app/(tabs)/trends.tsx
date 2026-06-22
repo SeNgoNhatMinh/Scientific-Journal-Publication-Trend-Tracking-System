@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   TrendingUp,
   Activity,
@@ -112,13 +113,33 @@ function AreaChart({ data, theme }: { data: { year: number; count: number }[]; t
         ))}
       </Svg>
 
-      {/* Year Labels row */}
-      <View style={styles.chartLabels}>
-        {data.map((d, idx) => (
-          <Text key={idx} style={[styles.chartLabelText, { color: theme.muted }]}>
-            {d.year}
-          </Text>
-        ))}
+      {/* Year Labels - absolutely positioned to match data points */}
+      <View style={{ position: 'relative', height: 16, width: chartWidth, marginTop: 4 }}>
+        {(() => {
+          const step = points.length > 12 ? 4 : points.length > 8 ? 3 : points.length > 5 ? 2 : 1;
+          return points.map((p, idx) => {
+            const isLast = idx === points.length - 1;
+            if (idx % step !== 0 && !isLast) return null;
+            return (
+              <Text
+                key={idx}
+                style={[
+                  styles.chartLabelText,
+                  {
+                    color: theme.muted,
+                    position: 'absolute',
+                    left: p.x - 14,
+                    top: 0,
+                    width: 28,
+                    textAlign: 'center',
+                  },
+                ]}
+              >
+                {p.year}
+              </Text>
+            );
+          });
+        })()}
       </View>
     </View>
   );
@@ -127,6 +148,7 @@ function AreaChart({ data, theme }: { data: { year: number; count: number }[]; t
 export default function TrendsScreen() {
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
+  const insets = useSafeAreaInsets();
 
   const [keyword, setKeyword] = useState('');
   const [trendData, setTrendData] = useState<any>(null);
@@ -199,7 +221,7 @@ export default function TrendsScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={styles.titleRow}>
           <TrendingUp size={24} color={theme.primary} />
           <Text style={[styles.title, { color: theme.text }]}>Research Trends</Text>
@@ -277,7 +299,7 @@ export default function TrendsScreen() {
             {/* AI Explain section */}
             <View style={[styles.aiSection, { borderColor: theme.border }]}>
               <View style={styles.aiHeader}>
-                <View>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={[styles.aiTitle, { color: theme.text }]}>AI Research Directions</Text>
                   <Text style={[styles.aiSubtitle, { color: theme.muted }]}>Generate research suggestions from this trend.</Text>
                 </View>
@@ -394,7 +416,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 16,
   },
   titleRow: {
@@ -524,15 +545,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 10,
   },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: width - 72,
-    paddingHorizontal: 12,
-    marginTop: 6,
-  },
   chartLabelText: {
-    fontSize: 10,
+    fontSize: 9,
   },
   aiSection: {
     marginTop: 20,
