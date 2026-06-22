@@ -39,6 +39,15 @@ const DEFAULT_API_SOURCES = [
     isActive: true,
   },
   {
+    name: 'arxiv',
+    baseUrl: 'https://export.arxiv.org',
+    fieldScope: ['search'],
+    syncFrequency: 'weekly',
+    trendingThreshold: 20,
+    minPaperCount: 10,
+    isActive: true,
+  },
+  {
     name: 'ieee',
     baseUrl: 'https://ieeexploreapi.ieee.org',
     fieldScope: ['articles'],

@@ -22,6 +22,10 @@ import AdminDashboardPage from "./pages/admin/AdminDashboardPage"
 import AdminUsersPage from "./pages/admin/AdminUsersPage"
 import AdminCorpusPage from "./pages/admin/AdminCorpusPage"
 import AdminMonitoringPage from "./pages/admin/AdminMonitoringPage"
+import AdminAuthorsPage from "./pages/admin/AdminAuthorsPage"
+import AdminJournalsPage from "./pages/admin/AdminJournalsPage"
+import AdminKeywordsPage from "./pages/admin/AdminKeywordsPage"
+import AdminTopicsPage from "./pages/admin/AdminTopicsPage"
 
 function App() {
   return (
@@ -55,6 +59,10 @@ function App() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="corpus" element={<AdminCorpusPage />} />
             <Route path="monitoring" element={<AdminMonitoringPage />} />
+            <Route path="authors" element={<AdminAuthorsPage />} />
+            <Route path="journals" element={<AdminJournalsPage />} />
+            <Route path="keywords" element={<AdminKeywordsPage />} />
+            <Route path="topics" element={<AdminTopicsPage />} />
           </Route>
         </Route>
       </Routes>

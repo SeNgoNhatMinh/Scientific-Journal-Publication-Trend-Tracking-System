@@ -84,4 +84,26 @@ router.post('/runs/:runId/follow', protect, corpusController.followRun);
  */
 router.get('/me/tracked', protect, corpusController.getMyTrackedRuns);
 
+/**
+ * @swagger
+ * /corpus/runs/{runId}/stop:
+ *   post:
+ *     tags: [Corpus]
+ *     summary: Dừng một lần chạy phân tích corpus đang chạy
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/runs/:runId/stop', protect, corpusController.stopRun);
+
+/**
+ * @swagger
+ * /corpus/runs/{runId}:
+ *   delete:
+ *     tags: [Corpus]
+ *     summary: Xóa một lần chạy phân tích corpus và dữ liệu liên quan
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/runs/:runId', protect, corpusController.deleteRun);
+
 module.exports = router;

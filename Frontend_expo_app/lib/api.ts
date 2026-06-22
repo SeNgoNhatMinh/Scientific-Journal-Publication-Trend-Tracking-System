@@ -37,6 +37,14 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.warn(`[SciTrend Network Error] Cannot reach the backend API at: "${api.defaults.baseURL}"`);
+      console.warn('Troubleshooting tips:');
+      console.warn('1. Check if the backend server is running on port 5000.');
+      console.warn('2. If testing on a physical phone, make sure it is connected to the same Wi-Fi network.');
+      console.warn('3. Ensure your computer firewall permits incoming connections on port 5000.');
+      console.warn('4. To run in dev using the production Railway database, set EXPO_PUBLIC_USE_LOCAL_BACKEND=false in your .env file or environment.');
+    }
     if (error.response && error.response.status === 401) {
       try {
         await AsyncStorage.removeItem('token');

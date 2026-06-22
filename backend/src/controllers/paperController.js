@@ -19,6 +19,7 @@ const buildLocalSourceFilter = source => {
   if (value === 'crossref') return ['crossref', 'Crossref'];
   if (value === 'ieee' || value === 'ieeexplore') return ['ieee', 'IEEE'];
   if (value === 'exa') return ['exa', 'Exa'];
+  if (value === 'arxiv') return ['arxiv', 'arXiv'];
 
   return [source];
 };
@@ -156,7 +157,7 @@ const getPaperDetails = async (req, res, next) => {
 
 // Save paper to database
 const normalizeSource = source => {
-  const value = String(source || '').toLowerCase().replace(/[-\s]/g, '_');
+  const value = String(source || '').trim().toLowerCase().replace(/[-\s]/g, '_');
   if (value === 'semanticscholar') return 'semantic_scholar';
   return value;
 };
@@ -217,7 +218,7 @@ const savePaper = async (req, res, next) => {
     if (!paper.source) {
       return res.status(400).json({
         success: false,
-        message: 'paper.source is required (openalex, semantic_scholar, crossref, ieee, or exa)',
+        message: 'paper.source is required (openalex, semantic_scholar, crossref, ieee, exa, or arxiv)',
       });
     }
 

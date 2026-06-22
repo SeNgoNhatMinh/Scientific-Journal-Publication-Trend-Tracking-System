@@ -1,6 +1,8 @@
 const AnalysisRun = require('../models/AnalysisRun');
 const Paper = require('../models/Paper');
 const SyncLog = require('../models/SyncLog');
+const Topic = require('../models/Topic');
+const PublicationTrend = require('../models/PublicationTrend');
 const corpusIngestionService = require('./corpusIngestionService');
 const corpusAnalysisService = require('./corpusAnalysisService');
 
@@ -12,7 +14,12 @@ const processRunAsync = async runId => {
 
   try {
     await corpusIngestionService.ingestRun(runId);
-    await corpusAnalysisService.analyzeRun(runId);
+    const checkRun = await AnalysisRun.findById(runId);
+    if (checkRun && checkRun.status === 'ingesting') {
+      await corpusAnalysisService.analyzeRun(runId);
+    } else {
+      console.log(`[corpus] run ${runId} is no longer in ingesting state. Skipping analysis.`);
+    }
   } catch (err) {
     console.error(`[corpus] run ${runId} failed:`, err.message);
     const failedRun = await AnalysisRun.findByIdAndUpdate(
@@ -105,10 +112,63 @@ const getRunPapers = async (runId, { page = 1, limit = 20 } = {}) => {
   return { papers, total, page: parseInt(page, 10), limit: parseInt(limit, 10) };
 };
 
+const stopRun = async runId => {
+  const run = await AnalysisRun.findById(runId);
+  if (!run) return null;
+
+  if (run.status === 'ingesting' || run.status === 'analyzing' || run.status === 'pending') {
+    run.status = 'failed';
+    run.errorMessage = 'Stopped by administrator';
+    run.completedAt = new Date();
+    await run.save();
+
+    if (run.syncLogId) {
+      await SyncLog.findByIdAndUpdate(run.syncLogId, {
+        status: 'failed',
+        errorMessage: 'Stopped by administrator',
+        finishedAt: new Date(),
+      });
+    }
+
+    runningJobs.delete(String(runId));
+  }
+
+  return run;
+};
+
+const deleteRun = async runId => {
+  const run = await AnalysisRun.findById(runId);
+  if (!run) return null;
+
+  // 1. Delete associated papers
+  await Paper.deleteMany({ analysisRunId: runId });
+
+  // 2. Delete associated topic
+  await Topic.deleteMany({ analysisRunId: runId });
+
+  // 3. Delete associated publication trends
+  await PublicationTrend.deleteMany({ analysisRunId: runId });
+
+  // 4. Delete associated sync log
+  if (run.syncLogId) {
+    await SyncLog.findByIdAndDelete(run.syncLogId);
+  }
+
+  // 5. Delete the run itself
+  await AnalysisRun.findByIdAndDelete(runId);
+
+  // 6. Clean up running job tracking set
+  runningJobs.delete(String(runId));
+
+  return run;
+};
+
 module.exports = {
   createRun,
   listRuns,
   getRunById,
   getRunPapers,
   processRunAsync,
+  stopRun,
+  deleteRun,
 };

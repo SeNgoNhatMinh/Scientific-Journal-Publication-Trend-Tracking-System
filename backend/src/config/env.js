@@ -35,6 +35,7 @@ const envConfig = {
   SEMANTIC_SCHOLAR_API_KEY: process.env.SEMANTIC_SCHOLAR_API_KEY || '',
   CROSSREF_API_URL: process.env.CROSSREF_API_URL || 'https://api.crossref.org',
   CROSSREF_MAILTO: process.env.CROSSREF_MAILTO || 'youremail@gmail.com',
+  ARXIV_API_URL: process.env.ARXIV_API_URL || 'http://export.arxiv.org',
   IEEE_API_URL: process.env.IEEE_API_URL || 'https://ieeexploreapi.ieee.org',
   IEEE_API_KEY: process.env.IEEE_API_KEY || '',
   EXA_API_URL: process.env.EXA_API_URL || 'https://api.exa.ai',

@@ -128,6 +128,11 @@ const ingestRun = async runId => {
   const yearFilter = `publication_year:${run.startYear}-${run.endYear}`;
 
   for (let page = 1; page <= run.maxPages; page += 1) {
+    const currentRun = await AnalysisRun.findById(runId);
+    if (!currentRun || currentRun.status !== 'ingesting') {
+      console.log(`[corpus] run ${runId} was stopped or deleted. Aborting ingestion.`);
+      break;
+    }
     const { data } = await openAlexClient.get('/works', {
       params: withOpenAlexParams({
         filter: `default.search:${run.seedKeyword},type:article,${yearFilter}`,

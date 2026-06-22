@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { User, Mail, Shield, Settings, Camera, BookMarked, Activity, Key, LogOut, Check, AlertCircle } from "lucide-react"
+import { User, Mail, Settings, Camera, BookMarked, Activity, Key, Check, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
