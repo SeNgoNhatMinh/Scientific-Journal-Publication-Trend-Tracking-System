@@ -1098,10 +1098,53 @@ const getAuthorInfo = async (source, query) => {
   throw new Error(`Author lookup is not supported for source: ${normalizedSource}`);
 };
 
+const getRelatedKeywordsTrend = async (source, keyword, startYear = 2010) => {
+  const normalizedSource = normalizeSource(source);
+  const currentYear = new Date().getFullYear();
+
+  if (normalizedSource !== 'openalex') {
+    throw new Error(`Related keywords trend is currently only supported for OpenAlex (requested: ${normalizedSource})`);
+  }
+
+  try {
+    // Fetch up to 100 works for trend aggregation
+    const response = await openAlexClient.get('/works', {
+      params: withOpenAlexParams({
+        search: keyword,
+        filter: `publication_year:${startYear}-${currentYear},type:article`,
+        per_page: 100,
+        select: 'title,publication_year,keywords,cited_by_count',
+        sort: 'cited_by_count:desc',
+      }),
+    });
+
+    const results = response.data.results || [];
+    const papers = results.map(work => ({
+      title: work.title || 'Untitled',
+      year: work.publication_year || null,
+      citationCount: work.cited_by_count || 0,
+      keywords: (work.keywords || [])
+        .map(k => k.display_name || k)
+        .filter(Boolean)
+        .slice(0, 15),
+    }));
+
+    return {
+      source: normalizedSource,
+      keyword,
+      papers,
+    };
+  } catch (error) {
+    toProviderError('OpenAlex', error);
+  }
+};
+
 module.exports = {
   searchPapers,
   getTrendData,
   getJournalInfo,
   getAuthorInfo,
   normalizeSource,
+  getRelatedKeywordsTrend,
 };
+
