@@ -274,31 +274,37 @@ const bookmarkPaper = async (req, res, next) => {
     const { paperId } = req.params;
     const userId = req.user.id;
 
-    // Find paper and add to user's bookmarks
-    const paper = await Paper.findByIdAndUpdate(
-      paperId,
-      { $addToSet: { bookmarkedBy: userId } },
-      { new: true }
-    );
-
-    if (!paper) {
+    const paperObj = await Paper.findById(paperId);
+    if (!paperObj) {
       return res.status(404).json({
         success: false,
         message: 'Paper not found',
       });
     }
 
-    // Add to user's bookmarks
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { $addToSet: { bookmarks: paperId } },
-      { new: true }
-    );
+    const isBookmarked = paperObj.bookmarkedBy && paperObj.bookmarkedBy.includes(userId);
+
+    let updatedPaper;
+    if (isBookmarked) {
+      updatedPaper = await Paper.findByIdAndUpdate(
+        paperId,
+        { $pull: { bookmarkedBy: userId } },
+        { new: true }
+      );
+      await User.findByIdAndUpdate(userId, { $pull: { bookmarks: paperId } });
+    } else {
+      updatedPaper = await Paper.findByIdAndUpdate(
+        paperId,
+        { $addToSet: { bookmarkedBy: userId } },
+        { new: true }
+      );
+      await User.findByIdAndUpdate(userId, { $addToSet: { bookmarks: paperId } });
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Paper bookmarked successfully',
-      paper,
+      message: isBookmarked ? 'Paper unbookmarked successfully' : 'Paper bookmarked successfully',
+      paper: updatedPaper,
     });
   } catch (error) {
     next(error);

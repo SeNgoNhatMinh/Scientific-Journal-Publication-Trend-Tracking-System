@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { TrendingUp, Activity, Loader2, Sparkles, Zap, Minus, TrendingDown, Search } from "lucide-react"
+import { TrendingUp, Activity, Loader2, Sparkles, Zap, Minus, TrendingDown, Search, ExternalLink, FileText, Bookmark } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +17,7 @@ import {
   Legend,
 } from "recharts"
 import api from "@/lib/api"
+import { formatText } from "@/lib/format"
 import { motion } from "framer-motion"
 
 const colors = [
@@ -74,6 +76,7 @@ function RelatedTooltip({ active, payload, label }: any) {
 }
 
 export default function TrendsPage() {
+  const navigate = useNavigate()
   const [keyword, setKeyword] = useState("")
   const [trendData, setTrendData] = useState<any>(null)
   const [trendingTopics, setTrendingTopics] = useState<any[]>([])
@@ -82,6 +85,10 @@ export default function TrendsPage() {
   const [isExplaining, setIsExplaining] = useState(false)
   const [aiDirections, setAiDirections] = useState<any[]>([])
   const [aiError, setAiError] = useState("")
+  const [hasGeneratedDirections, setHasGeneratedDirections] = useState(false)
+  const [savingEvidenceId, setSavingEvidenceId] = useState<string | null>(null)
+  const [savingBookmarkId, setSavingBookmarkId] = useState<string | null>(null)
+  const [savedEvidenceIds, setSavedEvidenceIds] = useState<Set<string>>(new Set())
 
   const [activeTab, setActiveTab] = useState<"volume" | "related">("volume")
   const [relKeyword, setRelKeyword] = useState("")
@@ -113,6 +120,7 @@ export default function TrendsPage() {
       setTrendData(res.data)
       setAiDirections([])
       setAiError("")
+      setHasGeneratedDirections(false)
     } catch (err: any) {
       console.error(err)
       if (err.response?.status === 504) setError("External API timeout. The source may be slow — please try again.")
@@ -158,23 +166,149 @@ export default function TrendsPage() {
     analyzeRelatedTrend(relKeyword)
   }
 
+  const cleanDoi = (doi?: string | null) =>
+    String(doi || "").trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
+
+  const getDoiUrl = (doi?: string | null) => {
+    const value = cleanDoi(doi)
+    return value ? `https://doi.org/${value}` : ""
+  }
+
+  const getSourceUrl = (paper: any) => paper?.url || getDoiUrl(paper?.doi)
+
+  const isMongoObjectId = (value: string) => /^[a-f\d]{24}$/i.test(value)
+
+  const getEvidenceId = (paper: any, fallback?: string | number) =>
+    String(paper?._id || paper?.id || paper?.doi || paper?.url || paper?.title || fallback || "")
+
+  const toBackendSource = (paperSource?: string | null) => {
+    const value = String(paperSource || "openalex").toLowerCase().replace(/[-\s]/g, "_")
+    if (value === "semanticscholar") return "semantic_scholar"
+    return value
+  }
+
+  const normalizeOpportunityScore = (score: any) => {
+    const value = Number(score)
+    if (!Number.isFinite(value)) return null
+    return Math.round(value > 1 ? value : value * 100)
+  }
+
+  const getDirectionTitle = (direction: any) => direction.title || direction.direction || "Research direction"
+
+  const getDirectionWhy = (direction: any) => direction.why || direction.rationale || "This direction has matching research evidence from academic sources."
+
+  const getDirectionKeywords = (direction: any) => direction.relatedKeywords || direction.keywords || []
+
+  const buildSavablePaper = (paper: any) => {
+    const normalizedSource = toBackendSource(paper.source)
+    const externalIds: Record<string, string> = {}
+    if (paper.id) {
+      if (normalizedSource === "openalex") externalIds.openalex = paper.id
+      if (normalizedSource === "semantic_scholar") externalIds.semanticScholar = paper.id
+      if (normalizedSource === "crossref") externalIds.crossref = paper.id
+      if (normalizedSource === "arxiv") externalIds.arxiv = paper.id
+      if (normalizedSource === "ieee") externalIds.ieee = paper.id
+      if (normalizedSource === "exa") externalIds.exa = paper.id
+    }
+
+    return {
+      title: formatText(paper.title, "Untitled paper"),
+      abstract: formatText(paper.abstract, "").slice(0, 5000),
+      doi: cleanDoi(paper.doi) || undefined,
+      publishedDate: paper.publishedDate || undefined,
+      publicationYear: paper.publicationYear || undefined,
+      citationCount: paper.citationCount || 0,
+      authors: (paper.authors || []).map((author: any, index: number) => ({
+        name: author.name || "Unknown",
+        externalId: author.authorId || undefined,
+        order: index + 1,
+      })),
+      journalName: paper.journalName || undefined,
+      source: normalizedSource,
+      url: paper.url || undefined,
+      pdfUrl: paper.pdfUrl || undefined,
+      externalIds,
+    }
+  }
+
+  const ensureEvidencePaperInDatabase = async (paper: any, evidenceId: string, showDetailLoading = false) => {
+    const paperId = String(paper?._id || paper?.id || "")
+    if (paperId && isMongoObjectId(paperId)) {
+      return paperId
+    }
+    if (!localStorage.getItem("token")) {
+      navigate("/login")
+      return null
+    }
+
+    if (showDetailLoading) setSavingEvidenceId(evidenceId)
+    try {
+      const res = await api.post("/papers", { paper: buildSavablePaper(paper) })
+      const databasePaperId = res.data.paper?._id || res.data.paper?.id
+      if (databasePaperId) return databasePaperId
+      setAiError("Could not open details because the paper was not saved into the database.")
+      return null
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        navigate("/login")
+        return null
+      }
+      setAiError(err.response?.data?.message || "Could not save this evidence paper before opening details.")
+      return null
+    } finally {
+      if (showDetailLoading) setSavingEvidenceId(null)
+    }
+  }
+
+  const openEvidenceDetails = async (paper: any, evidenceId: string) => {
+    setAiError("")
+    const databasePaperId = await ensureEvidencePaperInDatabase(paper, evidenceId, true)
+    if (databasePaperId) navigate(`/papers/${databasePaperId}`)
+  }
+
+  const saveEvidencePaper = async (paper: any, evidenceId: string) => {
+    if (!localStorage.getItem("token")) {
+      navigate("/login")
+      return
+    }
+
+    setAiError("")
+    setSavingBookmarkId(evidenceId)
+    try {
+      const databasePaperId = await ensureEvidencePaperInDatabase(paper, evidenceId, false)
+      if (!databasePaperId) return
+      await api.post(`/papers/${databasePaperId}/bookmark`)
+      setSavedEvidenceIds((current) => new Set(current).add(evidenceId))
+    } catch (err: any) {
+      if (err.response?.status === 401) navigate("/login")
+      else setAiError(err.response?.data?.message || "Could not add this evidence paper to your library.")
+    } finally {
+      setSavingBookmarkId(null)
+    }
+  }
 
   const explainTrend = async () => {
     if (!trendData?.keyword) return
     setIsExplaining(true)
     setAiError("")
+    setAiDirections([])
+    setHasGeneratedDirections(false)
     try {
-      const relatedKeywords = [
-        trendData.keyword,
-        ...(trendingTopics || []).slice(0, 8).map((topic) => topic.name || topic),
-      ].filter(Boolean)
-      const res = await api.post("/ai/recommendations/research-directions", {
-        keywords: Array.from(new Set(relatedKeywords)),
+      const res = await api.post("/trends/research-directions", {
+        keyword: trendData.keyword,
+        trendContext: {
+          keyword: trendData.keyword,
+          trendStatus: trendData.trendStatus,
+          averageGrowthRate: trendData.averageGrowthRate,
+          trends: trendData.trends || trendData.yearlyData || [],
+        },
+        limit: 5,
       })
       setAiDirections(res.data.directions || [])
     } catch (err: any) {
-      setAiError(err.response?.data?.message || "AI service is currently unavailable.")
+      setAiError(err.response?.data?.message || "Could not generate evidence-backed research directions.")
     } finally {
+      setHasGeneratedDirections(true)
       setIsExplaining(false)
     }
   }
@@ -283,11 +417,11 @@ export default function TrendsPage() {
                   </div>
                 </div>
 
-                {/* AI Explain section */}
+                {/* Research opportunity section */}
                 <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-border/30 bg-muted/20">
                   <div>
-                    <p className="text-sm font-medium">AI Research Directions</p>
-                    <p className="text-xs text-muted-foreground">Generate research directions from this trend.</p>
+                    <p className="text-sm font-medium">Research Opportunity Map</p>
+                    <p className="text-xs text-muted-foreground">Find evidence-backed research directions from this trend.</p>
                   </div>
                   <Button
                     variant="secondary"
@@ -297,7 +431,7 @@ export default function TrendsPage() {
                     className="gap-2"
                   >
                     {isExplaining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    Explain Trend
+                    {isExplaining ? "Finding evidence..." : "Generate Directions"}
                   </Button>
                 </div>
 
@@ -311,34 +445,133 @@ export default function TrendsPage() {
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="grid gap-3 md:grid-cols-2"
+                    className="grid gap-4"
                   >
                     {aiDirections.map((direction, index) => (
                       <div
                         key={index}
-                        className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-2"
+                        className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-4"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="text-sm font-semibold">{direction.direction}</h3>
-                          {direction.priority !== undefined && (
-                            <Badge variant="secondary" className="text-xs shrink-0">
-                              {Math.round(direction.priority * 100)}%
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-semibold leading-5">{getDirectionTitle(direction)}</h3>
+                            {direction.nextQuery && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Next query: <span className="text-foreground">{direction.nextQuery}</span>
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <Badge variant="secondary" className="text-xs">
+                              {direction.opportunityLevel || "Weak evidence"}
                             </Badge>
-                          )}
+                            {normalizeOpportunityScore(direction.opportunityScore ?? direction.priority) !== null && (
+                              <span className="text-[11px] text-muted-foreground">
+                                Score {normalizeOpportunityScore(direction.opportunityScore ?? direction.priority)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground">{direction.rationale}</p>
-                        {direction.keywords?.length > 0 && (
+
+                        {direction.formula && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {[
+                              ["Algorithm", direction.formula.algorithm],
+                              ["Domain", direction.formula.domain],
+                              ["Application", direction.formula.application],
+                            ].map(([label, value]) => (
+                              <div key={label} className="rounded-lg border border-border/30 bg-background/30 p-2">
+                                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                                <p className="text-xs font-medium mt-0.5">{value || "Evidence-driven"}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <p className="text-xs text-muted-foreground leading-5">{getDirectionWhy(direction)}</p>
+
+                        {getDirectionKeywords(direction).length > 0 && (
                           <div className="flex flex-wrap gap-1 pt-1">
-                            {direction.keywords.map((item: string) => (
+                            {getDirectionKeywords(direction).map((item: string) => (
                               <Badge key={item} variant="outline" className="text-xs">
                                 {item}
                               </Badge>
                             ))}
                           </div>
                         )}
+
+                        {direction.evidencePapers?.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5 text-primary" />
+                              Evidence Papers
+                            </p>
+                            <div className="space-y-2">
+                              {direction.evidencePapers.map((paper: any, paperIndex: number) => {
+                                const sourceUrl = getSourceUrl(paper)
+                                const doiUrl = getDoiUrl(paper.doi)
+                                const evidenceId = getEvidenceId(paper, paperIndex)
+                                return (
+                                  <div key={evidenceId} className="rounded-lg border border-border/30 bg-background/35 p-3">
+                                    <p className="text-xs font-medium leading-5">{formatText(paper.title, "Untitled paper")}</p>
+                                    <p className="text-[11px] text-muted-foreground mt-1">
+                                      {(paper.source || "source").toUpperCase()}
+                                      {paper.publicationYear ? ` • ${paper.publicationYear}` : ""}
+                                      {paper.doi ? ` • DOI: ${cleanDoi(paper.doi)}` : ""}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {sourceUrl && (
+                                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" asChild>
+                                          <a href={sourceUrl} target="_blank" rel="noreferrer">
+                                            <ExternalLink className="h-3 w-3" />
+                                            Open Source
+                                          </a>
+                                        </Button>
+                                      )}
+                                      {doiUrl && (
+                                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+                                          <a href={doiUrl} target="_blank" rel="noreferrer">DOI</a>
+                                        </Button>
+                                      )}
+                                      <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs"
+                                        onClick={() => openEvidenceDetails(paper, evidenceId)}
+                                        disabled={savingEvidenceId === evidenceId}
+                                      >
+                                        {savingEvidenceId === evidenceId ? <Loader2 className="h-3 w-3 animate-spin" /> : "View Details"}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs gap-1"
+                                        onClick={() => saveEvidencePaper(paper, evidenceId)}
+                                        disabled={savingBookmarkId === evidenceId || savedEvidenceIds.has(evidenceId)}
+                                      >
+                                        {savingBookmarkId === evidenceId ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Bookmark className="h-3 w-3" />
+                                        )}
+                                        {savedEvidenceIds.has(evidenceId) ? "In Library" : "Add to Library"}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </motion.div>
+                )}
+
+                {hasGeneratedDirections && !isExplaining && aiDirections.length === 0 && !aiError && (
+                  <div className="rounded-xl border border-border/30 bg-muted/20 p-4 text-sm text-muted-foreground">
+                    No evidence-backed directions found. Try a more specific keyword.
+                  </div>
                 )}
 
                 {/* Chart */}
@@ -695,4 +928,3 @@ export default function TrendsPage() {
     </div>
   )
 }
-

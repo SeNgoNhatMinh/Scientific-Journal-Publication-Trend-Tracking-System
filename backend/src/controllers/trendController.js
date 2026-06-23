@@ -4,6 +4,8 @@ const Topic = require('../models/Topic');
 const AnalysisRun = require('../models/AnalysisRun');
 const Keyword = require('../models/Keyword');
 const Paper = require('../models/Paper');
+const { suggestResearchKeywords } = require('../services/geminiService');
+const { RULES, normalize: normalizeClassifierText } = require('../services/keywordClassificationService');
 
 /**
  * Trend Analytics Controller
@@ -26,6 +28,263 @@ const normalizeKeywordText = text =>
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ');
+
+const toTitleCase = text =>
+  String(text || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase());
+
+const uniqueStrings = values =>
+  Array.from(
+    new Set(values.map(value => String(value || '').trim()).filter(Boolean))
+  );
+
+const termExistsInText = (text, term) => {
+  const normalizedText = normalizeClassifierText(text);
+  const normalizedTerm = normalizeClassifierText(term);
+  if (!normalizedText || !normalizedTerm) return false;
+  return new RegExp(`(^|\\s)${normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(
+    normalizedText
+  );
+};
+
+const buildFallbackRelatedKeywords = keyword => {
+  const seed = String(keyword || '').trim();
+  const lower = seed.toLowerCase();
+  const base = [seed];
+  const isMedicalKeyword = /\b(health|healthcare|medical|medicine|clinical|radiology|pathology|disease|diagnosis|cancer|brain|ct|mri)\b/.test(lower);
+
+  if (lower.includes('mamba')) {
+    base.push('vision mamba', 'mamba unet', 'medical image segmentation', 'state space models', 'selective scan mechanism');
+  }
+  if (lower.includes('transformer')) {
+    base.push('vision transformer', 'efficient transformer', 'transformer classification', 'transformer forecasting');
+  }
+  if (lower.includes('machine learning')) {
+    base.push(
+      'machine learning classification',
+      'machine learning prediction',
+      'machine learning forecasting',
+      'machine learning optimization',
+      'machine learning feature selection'
+    );
+  }
+
+  if (isMedicalKeyword) {
+    base.push(`${seed} medical imaging`, `${seed} diagnosis`, `${seed} clinical prediction`);
+  }
+
+  base.push(
+    `${seed} applications`,
+    `${seed} architecture`,
+    `${seed} methods`,
+    `${seed} benchmarks`
+  );
+
+  return uniqueStrings(base).slice(0, 8);
+};
+
+const safeSuggestRelatedKeywords = async keyword => {
+  const fallback = buildFallbackRelatedKeywords(keyword);
+  try {
+    const suggestions = await suggestResearchKeywords(keyword);
+    return uniqueStrings([keyword, ...fallback, ...suggestions]).slice(0, 8);
+  } catch (error) {
+    console.warn(`[research-directions] keyword suggestion fallback: ${error.message}`);
+    return fallback;
+  }
+};
+
+const compactPaper = paper => ({
+  id: paper.id || paper._id || paper.url || paper.title,
+  title: paper.title,
+  abstract: paper.abstract || '',
+  doi: paper.doi || null,
+  url: paper.url || null,
+  pdfUrl: paper.pdfUrl || null,
+  source: paper.source || null,
+  publicationYear: paper.publicationYear || null,
+  citationCount: paper.citationCount || 0,
+  journalName: paper.journalName || null,
+  authors: paper.authors || [],
+});
+
+const searchEvidencePapers = async (keyword, relatedKeywords, limit) => {
+  const queries = uniqueStrings([keyword, ...relatedKeywords]).slice(0, 3);
+  const sources = ['openalex', 'arxiv', 'crossref'];
+  const perQueryLimit = Math.min(Math.max(limit || 5, 3), 8);
+  const calls = [];
+
+  for (const query of queries) {
+    for (const source of sources) {
+      calls.push(
+        academicApiService
+          .searchPapers(source, query, { limit: perQueryLimit, page: 1 })
+          .then(result => (result.papers || []).map(paper => ({ ...paper, evidenceQuery: query })))
+          .catch(error => {
+            console.warn(`[research-directions] ${source} evidence search failed: ${error.message}`);
+            return [];
+          })
+      );
+    }
+  }
+
+  const batches = await Promise.all(calls);
+  const paperMap = new Map();
+  for (const paper of batches.flat()) {
+    const normalized = compactPaper(paper);
+    const key = normalized.doi || normalized.url || `${normalizeKeywordText(normalized.title)}::${normalized.source}`;
+    if (!key || paperMap.has(key)) continue;
+    paperMap.set(key, normalized);
+  }
+
+  return Array.from(paperMap.values());
+};
+
+const extractRoleTerms = (papers, relatedKeywords) => {
+  const text = [
+    ...relatedKeywords,
+    ...papers.flatMap(paper => [paper.title, paper.abstract]),
+  ].join(' ');
+  const roleMap = {
+    algorithm: new Map(),
+    domain: new Map(),
+    application: new Map(),
+    method: new Map(),
+    tool: new Map(),
+  };
+
+  for (const rule of RULES) {
+    if (!roleMap[rule.category]) continue;
+    for (const term of rule.terms) {
+      if (!termExistsInText(text, term)) continue;
+      const current = roleMap[rule.category].get(term) || { term, count: 0 };
+      current.count += 1;
+      roleMap[rule.category].set(term, current);
+    }
+  }
+
+  const normalizedText = normalizeClassifierText(text);
+  const addHeuristic = (category, term, pattern) => {
+    if (!pattern.test(normalizedText)) return;
+    const current = roleMap[category].get(term) || { term, count: 0 };
+    current.count += 2;
+    roleMap[category].set(term, current);
+  };
+
+  addHeuristic('domain', 'medical imaging', /\bmedical image|medical imaging|radiology\b/);
+  addHeuristic('domain', 'computer vision', /\bvision|image segmentation|object detection\b/);
+  addHeuristic('application', '3d segmentation', /\b3d\b.*\bsegmentation\b|\bsegmentation\b.*\b3d\b/);
+
+  const pick = category =>
+    Array.from(roleMap[category].values())
+      .sort((a, b) => b.count - a.count || a.term.localeCompare(b.term))
+      .map(item => item.term);
+
+  return {
+    algorithms: [...pick('algorithm'), ...pick('method'), ...pick('tool')],
+    domains: pick('domain'),
+    applications: pick('application'),
+  };
+};
+
+const paperMatchesDirection = (paper, parts) => {
+  const text = `${paper.title || ''} ${paper.abstract || ''}`;
+  const terms = [parts.algorithm, parts.domain, parts.application].filter(Boolean);
+  const matches = terms.filter(term => termExistsInText(text, term));
+  return terms.length >= 2 && matches.length >= 2;
+};
+
+const scoreDirection = ({ evidenceCount, latestYear, trendContext, specificityCount }) => {
+  const status = String(trendContext?.trendStatus || '').toLowerCase();
+  const statusScore = { exploding: 0.95, growing: 0.8, stable: 0.55, declining: 0.28 }[status] || 0.55;
+  const growth = Number(trendContext?.averageGrowthRate);
+  const growthScore = Number.isFinite(growth) ? Math.max(0, Math.min(1, (growth + 20) / 100)) : 0.5;
+  const evidenceScore = Math.min(1, evidenceCount / 4);
+  const recencyScore = latestYear ? Math.max(0, Math.min(1, (latestYear - 2018) / 8)) : 0.45;
+  const specificityScore = Math.min(1, specificityCount / 3);
+
+  return Math.max(
+    0.05,
+    Math.min(
+      0.98,
+      statusScore * 0.3 + growthScore * 0.2 + evidenceScore * 0.25 + recencyScore * 0.15 + specificityScore * 0.1
+    )
+  );
+};
+
+const opportunityLevel = score => {
+  if (score >= 0.72) return 'High';
+  if (score >= 0.48) return 'Medium';
+  return 'Low';
+};
+
+const buildWhy = (parts, evidenceCount, trendContext) => {
+  const status = trendContext?.trendStatus || 'tracked';
+  const growth = trendContext?.averageGrowthRate;
+  const growthText = growth !== undefined && growth !== null ? ` with average growth around ${growth}%` : '';
+  if (!parts.algorithm && parts.domain && parts.application) {
+    return `${toTitleCase(parts.domain)} and ${parts.application} appear together in ${evidenceCount} evidence paper(s), and the keyword is currently ${status}${growthText}.`;
+  }
+  const terms = [parts.algorithm, parts.domain, parts.application].filter(Boolean).map(toTitleCase);
+  return `${terms.join(' + ')} appears in ${evidenceCount} evidence paper(s), and the keyword is currently ${status}${growthText}.`;
+};
+
+const buildDirectionCandidates = (keyword, relatedKeywords, papers, trendContext, limit) => {
+  const roles = extractRoleTerms(papers, relatedKeywords);
+  const algorithms = roles.algorithms.length ? uniqueStrings(roles.algorithms).slice(0, 4) : [null];
+  const domains = roles.domains.length ? uniqueStrings(roles.domains).slice(0, 4) : [null];
+  const applications = roles.applications.length ? uniqueStrings(roles.applications).slice(0, 4) : [null];
+  const directions = [];
+
+  for (const algorithm of algorithms) {
+    for (const domain of domains) {
+      for (const application of applications) {
+        const parts = { algorithm, domain, application };
+        const specificityCount = [algorithm, domain, application].filter(Boolean).length;
+        if (specificityCount < 2) continue;
+
+        const evidencePapers = papers
+          .filter(paper => paperMatchesDirection(paper, parts))
+          .sort((a, b) => (b.publicationYear || 0) - (a.publicationYear || 0) || (b.citationCount || 0) - (a.citationCount || 0))
+          .slice(0, 4);
+
+        if (!evidencePapers.length) continue;
+
+        const latestYear = Math.max(...evidencePapers.map(paper => paper.publicationYear || 0), 0);
+        const opportunityScore = scoreDirection({
+          evidenceCount: evidencePapers.length,
+          latestYear,
+          trendContext,
+          specificityCount,
+        });
+
+        const titleParts = [algorithm, domain, application].filter(Boolean).map(toTitleCase);
+        directions.push({
+          title: titleParts.length === 3
+            ? `${titleParts[0]} for ${titleParts[1]} ${titleParts[2]}`.replace(/\s+/g, ' ')
+            : `${titleParts.join(' + ')} Research`,
+          formula: {
+            algorithm: algorithm ? toTitleCase(algorithm) : 'Not specified by evidence',
+            domain: domain ? toTitleCase(domain) : 'Not specified by evidence',
+            application: application ? toTitleCase(application) : 'Not specified by evidence',
+          },
+          why: buildWhy(parts, evidencePapers.length, trendContext),
+          relatedKeywords: uniqueStrings([algorithm, domain, application, ...relatedKeywords].filter(Boolean)).slice(0, 8),
+          opportunityLevel: opportunityLevel(opportunityScore),
+          opportunityScore: Number(opportunityScore.toFixed(4)),
+          nextQuery: uniqueStrings([algorithm, domain, application].filter(Boolean)).join(' '),
+          evidencePapers,
+        });
+      }
+    }
+  }
+
+  return directions
+    .sort((a, b) => b.opportunityScore - a.opportunityScore || b.evidencePapers.length - a.evidencePapers.length)
+    .slice(0, limit);
+};
 
 const validateAnalysisRunId = (analysisRunId, res) => {
   if (!analysisRunId || mongoose.Types.ObjectId.isValid(analysisRunId)) return true;
@@ -163,6 +422,46 @@ const compareTrends = async (req, res, next) => {
     res.status(200).json({
       success: true,
       comparisons,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getResearchDirections = async (req, res, next) => {
+  try {
+    const { keyword, trendContext = {}, limit = 5 } = req.body;
+    const safeLimit = parseLimit(limit, 5, 8);
+
+    if (!keyword || !String(keyword).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'keyword is required',
+      });
+    }
+
+    const seedKeyword = String(keyword).trim();
+    const relatedKeywords = await safeSuggestRelatedKeywords(seedKeyword);
+    const evidencePapers = await searchEvidencePapers(seedKeyword, relatedKeywords, 5);
+    const directions = buildDirectionCandidates(
+      seedKeyword,
+      relatedKeywords,
+      evidencePapers,
+      trendContext,
+      safeLimit
+    );
+
+    res.status(200).json({
+      success: true,
+      keyword: seedKeyword,
+      relatedKeywords,
+      directions,
+      meta: {
+        evidencePaperCount: evidencePapers.length,
+        directionCount: directions.length,
+        sources: ['openalex', 'arxiv', 'crossref'],
+        rule: 'Directions without evidence papers are excluded from the main list.',
+      },
     });
   } catch (error) {
     next(error);
@@ -603,6 +902,7 @@ const getRelatedKeywordsTrend = async (req, res, next) => {
 module.exports = {
   getTrendData,
   compareTrends,
+  getResearchDirections,
   getEmergingTopics,
   getTrendingTopics,
   getTopicDetails,

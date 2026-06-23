@@ -32,6 +32,15 @@ const getWorkspace = async (req, res, next) => {
   }
 };
 
+const deleteWorkspace = async (req, res, next) => {
+  try {
+    const result = await workspaceService.deleteWorkspace(req.params.workspaceId, req.user.id);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const addMember = async (req, res, next) => {
   try {
     const member = await workspaceService.addMember(req.params.workspaceId, req.user.id, req.body);
@@ -216,4 +225,5 @@ module.exports = {
   getTrends,
   getKeywordGraph,
   uploadPaperPdf,
+  deleteWorkspace,
 };
