@@ -11,9 +11,23 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts"
 import api from "@/lib/api"
 import { motion } from "framer-motion"
+
+const colors = [
+  "oklch(0.65 0.25 285)", // purple
+  "oklch(0.65 0.23 140)", // emerald
+  "oklch(0.65 0.22 40)",  // orange
+  "oklch(0.65 0.18 200)", // sky
+  "oklch(0.7 0.18 80)",   // gold
+  "oklch(0.65 0.22 345)", // rose
+  "oklch(0.65 0.18 170)", // teal
+  "oklch(0.6 0.23 310)",  // fuchsia
+];
 
 // GET /trends/trending response: topics[].name, trendStatus, emergenceScore
 // GET /trends/keyword response: keyword, trendStatus, averageGrowthRate (string), trends[]{year, count, growthRate}
@@ -40,6 +54,25 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
+function RelatedTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const sortedPayload = [...payload].sort((a: any, b: any) => b.value - a.value);
+  return (
+    <div className="glass rounded-lg px-3 py-2 border border-border/50 text-xs shadow-xl max-h-60 overflow-y-auto space-y-1">
+      <p className="font-semibold mb-1 text-foreground text-sm">{label}</p>
+      {sortedPayload.map((p: any, i: number) => {
+        if (p.value === 0) return null;
+        return (
+          <p key={i} className="flex justify-between gap-4" style={{ color: p.color }}>
+            <span>{p.name}:</span>
+            <span className="font-bold">{p.value} papers</span>
+          </p>
+        );
+      })}
+    </div>
+  )
+}
+
 export default function TrendsPage() {
   const [keyword, setKeyword] = useState("")
   const [trendData, setTrendData] = useState<any>(null)
@@ -49,6 +82,14 @@ export default function TrendsPage() {
   const [isExplaining, setIsExplaining] = useState(false)
   const [aiDirections, setAiDirections] = useState<any[]>([])
   const [aiError, setAiError] = useState("")
+
+  const [activeTab, setActiveTab] = useState<"volume" | "related">("volume")
+  const [relKeyword, setRelKeyword] = useState("")
+  const [relSource, setRelSource] = useState<"openalex" | "local">("openalex")
+  const [relStartYear, setRelStartYear] = useState("2010")
+  const [relData, setRelData] = useState<any>(null)
+  const [relIsLoading, setRelIsLoading] = useState(false)
+  const [relError, setRelError] = useState("")
 
   useEffect(() => {
     const fetchTrending = async () => {
@@ -83,10 +124,40 @@ export default function TrendsPage() {
     }
   }
 
+  const analyzeRelatedTrend = async (kw: string) => {
+    if (!kw) return
+    setRelIsLoading(true)
+    setRelError("")
+    try {
+      const res = await api.get(`/trends/related-keywords`, {
+        params: {
+          keyword: kw,
+          source: relSource,
+          startYear: parseInt(relStartYear, 10) || 2010
+        }
+      })
+      setRelData(res.data)
+    } catch (err: any) {
+      console.error(err)
+      if (err.response?.status === 504) setRelError("External API timeout. The source may be slow — please try again.")
+      else if (err.response?.status === 429) setRelError("Rate limit exceeded. Please wait a moment and try again.")
+      else setRelError(err.response?.data?.message || "Failed to analyze related keywords trend.")
+      setRelData(null)
+    } finally {
+      setRelIsLoading(false)
+    }
+  }
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     analyzeTrend(keyword)
   }
+
+  const handleRelatedSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    analyzeRelatedTrend(relKeyword)
+  }
+
 
   const explainTrend = async () => {
     if (!trendData?.keyword) return
@@ -127,215 +198,501 @@ export default function TrendsPage() {
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main chart card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="lg:col-span-2 glass rounded-2xl border border-border/40 p-6 space-y-5"
+      {/* Tabs */}
+      <div className="flex border-b border-border/40 gap-4 mb-2">
+        <button
+          onClick={() => setActiveTab("volume")}
+          className={`pb-2.5 px-2 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === "volume"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
         >
-          <div>
-            <h2 className="font-semibold text-base flex items-center gap-2 mb-1">
-              <Activity className="h-4 w-4 text-primary" /> Keyword Growth Analysis
-            </h2>
-            <p className="text-xs text-muted-foreground">Enter a research keyword to see publication volume over time.</p>
-          </div>
+          Keyword Volume Trend
+        </button>
+        <button
+          onClick={() => setActiveTab("related")}
+          className={`pb-2.5 px-2 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === "related"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Related Keywords Trend Analyzer
+        </button>
+      </div>
 
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                placeholder="e.g., Transformer Models, CRISPR, Quantum..."
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="pl-9 h-10 bg-muted/30 border-border/50 rounded-xl"
-              />
+      {activeTab === "volume" ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main chart card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="lg:col-span-2 glass rounded-2xl border border-border/40 p-6 space-y-5"
+          >
+            <div>
+              <h2 className="font-semibold text-base flex items-center gap-2 mb-1">
+                <Activity className="h-4 w-4 text-primary" /> Keyword Growth Analysis
+              </h2>
+              <p className="text-xs text-muted-foreground">Enter a research keyword to see publication volume over time.</p>
             </div>
-            <Button type="submit" disabled={isLoading} className="h-10 px-5 rounded-xl">
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Analyze"}
-            </Button>
-          </form>
 
-          {error && (
-            <div className="rounded-xl bg-destructive/10 border border-destructive/20 text-destructive p-3 text-sm">
-              {error}
-            </div>
-          )}
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="e.g., Transformer Models, CRISPR, Quantum..."
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  className="pl-9 h-10 bg-muted/30 border-border/50 rounded-xl"
+                />
+              </div>
+              <Button type="submit" disabled={isLoading} className="h-10 px-5 rounded-xl">
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Analyze"}
+              </Button>
+            </form>
 
-          {trendData ? (
-            <div className="space-y-5">
-              {/* Stats row */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-muted/30 border border-border/30">
-                <div>
-                  <h3 className="font-semibold text-base">{trendData.keyword}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Source: {trendData.source}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {trendConfig && (
-                    <Badge
-                      variant="outline"
-                      className={`border text-xs px-2 py-0.5 flex items-center gap-1 ${trendConfig.badgeCls}`}
-                    >
-                      <trendConfig.icon className="h-3 w-3" />
-                      {trendConfig.label}
-                    </Badge>
-                  )}
-                  <div className={`text-2xl font-bold ${trendConfig?.cls ?? "text-muted-foreground"}`}>
-                    {trendData.averageGrowthRate}%
+            {error && (
+              <div className="rounded-xl bg-destructive/10 border border-destructive/20 text-destructive p-3 text-sm">
+                {error}
+              </div>
+            )}
+
+            {trendData ? (
+              <div className="space-y-5">
+                {/* Stats row */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-muted/30 border border-border/30">
+                  <div>
+                    <h3 className="font-semibold text-base">{trendData.keyword}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Source: {trendData.source}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {trendConfig && (
+                      <Badge
+                        variant="outline"
+                        className={`border text-xs px-2 py-0.5 flex items-center gap-1 ${trendConfig.badgeCls}`}
+                      >
+                        <trendConfig.icon className="h-3 w-3" />
+                        {trendConfig.label}
+                      </Badge>
+                    )}
+                    <div className={`text-2xl font-bold ${trendConfig?.cls ?? "text-muted-foreground"}`}>
+                      {trendData.averageGrowthRate}%
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* AI Explain section */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-border/30 bg-muted/20">
-                <div>
-                  <p className="text-sm font-medium">AI Research Directions</p>
-                  <p className="text-xs text-muted-foreground">Generate research directions from this trend.</p>
+                {/* AI Explain section */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-border/30 bg-muted/20">
+                  <div>
+                    <p className="text-sm font-medium">AI Research Directions</p>
+                    <p className="text-xs text-muted-foreground">Generate research directions from this trend.</p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={explainTrend}
+                    disabled={isExplaining}
+                    className="gap-2"
+                  >
+                    {isExplaining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    Explain Trend
+                  </Button>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={explainTrend}
-                  disabled={isExplaining}
-                  className="gap-2"
-                >
-                  {isExplaining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  Explain Trend
-                </Button>
-              </div>
 
-              {aiError && (
-                <div className="rounded-xl bg-destructive/10 border border-destructive/20 text-destructive p-3 text-sm">
-                  {aiError}
-                </div>
-              )}
+                {aiError && (
+                  <div className="rounded-xl bg-destructive/10 border border-destructive/20 text-destructive p-3 text-sm">
+                    {aiError}
+                  </div>
+                )}
 
-              {aiDirections.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="grid gap-3 md:grid-cols-2"
-                >
-                  {aiDirections.map((direction, index) => (
-                    <div
-                      key={index}
-                      className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-sm font-semibold">{direction.direction}</h3>
-                        {direction.priority !== undefined && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            {Math.round(direction.priority * 100)}%
-                          </Badge>
+                {aiDirections.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="grid gap-3 md:grid-cols-2"
+                  >
+                    {aiDirections.map((direction, index) => (
+                      <div
+                        key={index}
+                        className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="text-sm font-semibold">{direction.direction}</h3>
+                          {direction.priority !== undefined && (
+                            <Badge variant="secondary" className="text-xs shrink-0">
+                              {Math.round(direction.priority * 100)}%
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{direction.rationale}</p>
+                        {direction.keywords?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {direction.keywords.map((item: string) => (
+                              <Badge key={item} variant="outline" className="text-xs">
+                                {item}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">{direction.rationale}</p>
-                      {direction.keywords?.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {direction.keywords.map((item: string) => (
-                            <Badge key={item} variant="outline" className="text-xs">
-                              {item}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </motion.div>
-              )}
+                    ))}
+                  </motion.div>
+                )}
 
-              {/* Chart */}
-              <div className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData.trends} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="oklch(0.65 0.27 285)" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="oklch(0.65 0.27 285)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.4 0.02 270 / 0.2)" vertical={false} />
-                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="count"
-                      stroke="oklch(0.65 0.27 285)"
-                      strokeWidth={2.5}
-                      fill="url(#trendGradient)"
-                      dot={{ r: 3, fill: "oklch(0.65 0.27 285)", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "oklch(0.65 0.27 285)", stroke: "oklch(0.75 0.27 285)", strokeWidth: 2 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {/* Chart */}
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData.trends} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="oklch(0.65 0.27 285)" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="oklch(0.65 0.27 285)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.4 0.02 270 / 0.2)" vertical={false} />
+                      <XAxis dataKey="year" tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="oklch(0.65 0.27 285)"
+                        strokeWidth={2.5}
+                        fill="url(#trendGradient)"
+                        dot={{ r: 3, fill: "oklch(0.65 0.27 285)", strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: "oklch(0.65 0.27 285)", stroke: "oklch(0.75 0.27 285)", strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
-          ) : !error && (
-            <div className="h-[280px] flex flex-col items-center justify-center border-2 border-dashed border-border/30 rounded-xl text-center px-6">
-              <Activity className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">Search for a keyword to view its trend chart.</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">Try: "machine learning", "CRISPR", "transformer"</p>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Right sidebar */}
-        <div className="space-y-5">
-          {/* Hot Topics */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="glass rounded-2xl border border-border/40 p-5"
-          >
-            <h2 className="font-semibold text-sm flex items-center gap-2 mb-1">
-              <TrendingUp className="h-4 w-4 text-orange-400" /> Hot Topics Now
-            </h2>
-            <p className="text-xs text-muted-foreground mb-4">Topics from corpus with exploding or growing status.</p>
-            {trendingTopics.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No trending topics yet. Run a corpus analysis first.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {trendingTopics.map((topic, i) => {
-                  const conf = TREND_CONFIG[topic.trendStatus] ?? null
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => { setKeyword(topic.name || topic); analyzeTrend(topic.name || topic) }}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
-                        conf?.badgeCls ?? "border-border/50 bg-muted/30 text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {topic.name || topic}
-                      {topic.trendStatus && (
-                        <span className="ml-1 opacity-60 text-xs">({topic.trendStatus})</span>
-                      )}
-                    </button>
-                  )
-                })}
+            ) : !error && (
+              <div className="h-[280px] flex flex-col items-center justify-center border-2 border-dashed border-border/30 rounded-xl text-center px-6">
+                <Activity className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground">Search for a keyword to view its trend chart.</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Try: "machine learning", "CRISPR", "transformer"</p>
               </div>
             )}
           </motion.div>
 
-          {/* Compare card */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="glass rounded-2xl border border-border/40 p-5"
-          >
-            <h2 className="font-semibold text-sm flex items-center gap-2 mb-1">
-              <Activity className="h-4 w-4 text-blue-400" /> Compare Keywords
-            </h2>
-            <p className="text-xs text-muted-foreground mb-4">Compare multiple keyword trends side by side.</p>
-            <Button variant="outline" className="w-full h-9 text-sm rounded-xl" disabled>
-              Open Comparison Tool
-            </Button>
-          </motion.div>
+          {/* Right sidebar */}
+          <div className="space-y-5">
+            {/* Hot Topics */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="glass rounded-2xl border border-border/40 p-5"
+            >
+              <h2 className="font-semibold text-sm flex items-center gap-2 mb-1">
+                <TrendingUp className="h-4 w-4 text-orange-400" /> Hot Topics Now
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">Topics from corpus with exploding or growing status.</p>
+              {trendingTopics.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No trending topics yet. Run a corpus analysis first.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {trendingTopics.map((topic, i) => {
+                    const conf = TREND_CONFIG[topic.trendStatus] ?? null
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setKeyword(topic.name || topic);
+                          analyzeTrend(topic.name || topic);
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
+                          conf?.badgeCls ?? "border-border/50 bg-muted/30 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {topic.name || topic}
+                        {topic.trendStatus && (
+                          <span className="ml-1 opacity-60 text-xs">({topic.trendStatus})</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+
+            {/* Compare card */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="glass rounded-2xl border border-border/40 p-5"
+            >
+              <h2 className="font-semibold text-sm flex items-center gap-2 mb-1">
+                <Activity className="h-4 w-4 text-blue-400" /> Compare Keywords
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">Compare multiple keyword trends side by side.</p>
+              <Button variant="outline" className="w-full h-9 text-sm rounded-xl" disabled>
+                Open Comparison Tool
+              </Button>
+            </motion.div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Related Trend Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="lg:col-span-2 glass rounded-2xl border border-border/40 p-6 space-y-6"
+          >
+            <div>
+              <h2 className="font-semibold text-base flex items-center gap-2 mb-1">
+                <Activity className="h-4 w-4 text-primary" /> Related Keywords Trend Analyzer
+              </h2>
+              <p className="text-xs text-muted-foreground">Search a keyword to extract associated keywords in matching papers and view their co-trends.</p>
+            </div>
+
+            <form onSubmit={handleRelatedSearch} className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="e.g., Mamba, Selective Scan, Transformer..."
+                  value={relKeyword}
+                  onChange={(e) => setRelKeyword(e.target.value)}
+                  className="pl-9 h-10 bg-muted/30 border-border/50 rounded-xl w-full text-sm"
+                />
+              </div>
+              
+              <div className="flex gap-2 shrink-0">
+                <select
+                  value={relSource}
+                  onChange={(e) => setRelSource(e.target.value as any)}
+                  className="h-10 px-3 bg-muted/30 border border-border/50 rounded-xl text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-muted/40 transition-all font-medium"
+                >
+                  <option value="openalex" className="bg-background text-foreground">OpenAlex API</option>
+                  <option value="local" className="bg-background text-foreground">Local Database</option>
+                </select>
+
+                <div className="flex items-center gap-1.5 bg-muted/30 border border-border/50 rounded-xl px-2.5 h-10">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold whitespace-nowrap">From:</span>
+                  <input
+                    type="number"
+                    min="2000"
+                    max={new Date().getFullYear()}
+                    value={relStartYear}
+                    onChange={(e) => setRelStartYear(e.target.value)}
+                    className="w-10 bg-transparent border-none p-0 text-sm focus:outline-none focus:ring-0 text-foreground font-semibold text-center"
+                  />
+                </div>
+
+                <Button type="submit" disabled={relIsLoading} className="h-10 px-5 rounded-xl text-sm font-semibold">
+                  {relIsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Analyze"}
+                </Button>
+              </div>
+            </form>
+
+            {relError && (
+              <div className="rounded-xl bg-destructive/10 border border-destructive/20 text-destructive p-3 text-sm">
+                {relError}
+              </div>
+            )}
+
+            {relData ? (
+              <div className="space-y-6">
+                {/* Stats Row */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-muted/30 border border-border/30">
+                  <div>
+                    <h3 className="font-semibold text-base flex items-center gap-1.5">
+                      {relData.keyword}
+                      <Badge variant="secondary" className="text-xs uppercase font-bold tracking-wider py-0 px-1.5">
+                        {relData.source}
+                      </Badge>
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Analyzed {relData.totalPapers} publications from {relStartYear} to present</p>
+                  </div>
+                </div>
+
+                {/* Multi-line chart */}
+                {relData.trends?.length > 0 && relData.topKeywords?.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Yearly Trend of Top Related Keywords</p>
+                    <div className="h-[300px] w-full pr-4">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={relData.trends} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.4 0.02 270 / 0.15)" vertical={false} />
+                          <XAxis dataKey="year" tick={{ fontSize: 10, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
+                          <Tooltip content={<RelatedTooltip />} />
+                          <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                          {relData.topKeywords.slice(0, 8).map((kw: any, i: number) => (
+                            <Line
+                              key={kw.keyword}
+                              type="monotone"
+                              dataKey={kw.keyword}
+                              stroke={colors[i % colors.length]}
+                              strokeWidth={2.5}
+                              dot={{ r: 2.5, fill: colors[i % colors.length], strokeWidth: 0 }}
+                              activeDot={{ r: 4.5, strokeWidth: 1.5 }}
+                            />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-[200px] flex items-center justify-center border border-dashed border-border/30 rounded-xl">
+                    <p className="text-sm text-muted-foreground italic">No trend data available. Make sure papers contain keywords.</p>
+                  </div>
+                )}
+
+                {/* Papers List with Keywords */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm flex items-center gap-1.5">
+                    <Search className="h-4 w-4 text-primary" /> Extracted Publications ({relData.papers?.length || 0})
+                  </h3>
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {relData.papers && relData.papers.length > 0 ? (
+                      relData.papers.map((paper: any, i: number) => (
+                        <div key={i} className="p-3.5 rounded-xl border border-border/20 bg-muted/10 space-y-2 hover:bg-muted/15 transition-all">
+                          <div className="flex items-start justify-between gap-4">
+                            <h4 className="font-medium text-xs text-foreground leading-relaxed">{paper.title}</h4>
+                            <div className="flex gap-1.5 items-center text-[10px] font-semibold text-muted-foreground shrink-0">
+                              <span className="bg-muted/50 px-1.5 py-0.5 rounded border border-border/30">{paper.year || "N/A"}</span>
+                              {paper.citationCount !== undefined && (
+                                <span className="bg-muted/50 px-1.5 py-0.5 rounded border border-border/30">{paper.citationCount} cit.</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1">
+                            {paper.keywords?.length > 0 ? (
+                              paper.keywords.map((kw: string, idx: number) => (
+                                <Badge
+                                  key={idx}
+                                  variant="outline"
+                                  onClick={() => {
+                                    setRelKeyword(kw);
+                                    analyzeRelatedTrend(kw);
+                                  }}
+                                  className="text-[9px] font-semibold cursor-pointer hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all py-0 px-1.5"
+                                >
+                                  {kw}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/60 italic">No keywords available</span>
+                            )}
+                          </div>
+                          {paper.keywords?.length > 0 && (
+                            <div className="text-[9px] text-muted-foreground/50 font-medium">
+                              Total: {paper.keywords.length} keywords extracted
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic text-center py-6">No papers found.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : !relError && (
+              <div className="h-[350px] flex flex-col items-center justify-center border-2 border-dashed border-border/30 rounded-xl text-center px-6">
+                <Activity className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm text-muted-foreground font-medium">Search for a main keyword to extract and analyze related keyword trends.</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Try: "mamba", "quantum computing", "crispr"</p>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Right sidebar: Related Keyword Frequency List */}
+          <div className="space-y-6">
+            {relData && relData.topKeywords?.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="glass rounded-2xl border border-border/40 p-5 space-y-4"
+              >
+                <div>
+                  <h2 className="font-semibold text-sm flex items-center gap-2 mb-1">
+                    <Activity className="h-4 w-4 text-primary" /> Top Related Keywords
+                  </h2>
+                  <p className="text-[10px] text-muted-foreground">Occurrence frequency in {relData.totalPapers} matching papers. Click to pivot search.</p>
+                </div>
+
+                <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
+                  {relData.topKeywords.map((item: any, i: number) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setRelKeyword(item.keyword);
+                        analyzeRelatedTrend(item.keyword);
+                      }}
+                      className="w-full text-left p-3 rounded-xl border border-border/20 bg-muted/5 hover:bg-muted/15 transition-all group space-y-2 hover:scale-[1.01]"
+                    >
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1">{item.keyword}</span>
+                        <span className="text-muted-foreground font-bold shrink-0">{item.count} papers ({item.percentage}%)</span>
+                      </div>
+                      
+                      {/* Premium Progress Bar */}
+                      <div className="h-1 w-full bg-muted/20 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${item.percentage}%`,
+                            backgroundColor: colors[i % colors.length]
+                          }}
+                        />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Hot Topics Sidebar */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="glass rounded-2xl border border-border/40 p-5"
+            >
+              <h2 className="font-semibold text-sm flex items-center gap-2 mb-1">
+                <TrendingUp className="h-4 w-4 text-orange-400" /> Hot Topics Now
+              </h2>
+              <p className="text-xs text-muted-foreground mb-4">Topics from corpus with exploding or growing status.</p>
+              {trendingTopics.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No trending topics yet. Run a corpus analysis first.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {trendingTopics.map((topic, i) => {
+                    const conf = TREND_CONFIG[topic.trendStatus] ?? null
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setRelKeyword(topic.name || topic);
+                          analyzeRelatedTrend(topic.name || topic);
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-all hover:scale-105 ${
+                          conf?.badgeCls ?? "border-border/50 bg-muted/30 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {topic.name || topic}
+                        {topic.trendStatus && (
+                          <span className="ml-1 opacity-60 text-xs">({topic.trendStatus})</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
