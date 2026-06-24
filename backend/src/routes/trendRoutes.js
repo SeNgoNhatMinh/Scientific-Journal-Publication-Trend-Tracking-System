@@ -246,4 +246,39 @@ router.get('/algorithm-domains', trendController.getAlgorithmDomains);
  */
 router.get('/topics/:topicId', trendController.getTopicDetails);
 
+/**
+ * @swagger
+ * /trends/related-keywords:
+ *   get:
+ *     tags:
+ *       - Trends
+ *     security: []
+ *     summary: Thống kê và tính trend của các từ khóa phụ liên quan đến từ khóa chính
+ *     description: Search papers matching a keyword, extract and aggregate their keywords by year from 2010 to present to show sub-trends.
+ *     parameters:
+ *       - in: query
+ *         name: keyword
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: source
+ *         schema:
+ *           type: string
+ *           enum: [openalex, local]
+ *           default: openalex
+ *       - in: query
+ *         name: startYear
+ *         schema:
+ *           type: integer
+ *           default: 2010
+ *     responses:
+ *       200:
+ *         description: Related keywords trends and papers retrieved successfully
+ *       400:
+ *         description: Missing or invalid parameters
+ */
+router.get('/related-keywords', trendController.getRelatedKeywordsTrend);
+
 module.exports = router;
+

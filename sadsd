@@ -1,0 +1,201 @@
+import { useState, useEffect } from "react"
+import { TrendingUp, Activity, Loader2, Sparkles, Zap, Minus, TrendingDown, Search, ExternalLink, FileText, Bookmark } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+} from "recharts"
+import api from "@/lib/api"
+import { formatText } from "@/lib/format"
+import { motion } from "framer-motion"
+
+// GET /trends/trending response: topics[].name, trendStatus, emergenceScore
+// GET /trends/keyword response: keyword, trendStatus, averageGrowthRate (string), trends[]{year, count, growthRate}
+
+const TREND_CONFIG: Record<string, { label: string; icon: any; cls: string; badgeCls: string }> = {
+  exploding: { label: "Exploding", icon: Zap, cls: "trend-exploding", badgeCls: "bg-orange-500/10 text-orange-400 border-orange-500/30" },
+  growing:   { label: "Growing",   icon: TrendingUp, cls: "trend-growing",   badgeCls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  stable:    { label: "Stable",    icon: Minus, cls: "trend-stable",    badgeCls: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" },
+  declining: { label: "Declining", icon: TrendingDown, cls: "trend-declining", badgeCls: "bg-slate-500/10 text-slate-400 border-slate-500/30" },
+}
+
+// Custom tooltip for recharts
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="glass rounded-lg px-3 py-2 border border-border/50 text-sm shadow-xl">
+      <p className="font-semibold mb-1 text-foreground">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} style={{ color: p.color }}>
+          {p.name === "count" ? `${p.value?.toLocaleString()} papers` : `${p.value}% growth`}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+export default function TrendsPage() {
+  const navigate = useNavigate()
+  const [keyword, setKeyword] = useState("")
+  const [trendData, setTrendData] = useState<any>(null)
+  const [trendingTopics, setTrendingTopics] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [isExplaining, setIsExplaining] = useState(false)
+  const [aiDirections, setAiDirections] = useState<any[]>([])
+  const [aiError, setAiError] = useState("")
+  const [hasGeneratedDirections, setHasGeneratedDirections] = useState(false)
+  const [savingEvidenceId, setSavingEvidenceId] = useState<string | null>(null)
+  const [savingBookmarkId, setSavingBookmarkId] = useState<string | null>(null)
+  const [savedEvidenceIds, setSavedEvidenceIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const fetchTrending = async () => {
+      try {
+        const res = await api.get("/trends/trending")
+        setTrendingTopics(res.data.topics || [])
+      } catch (err) {
+        console.error("Failed to fetch trending topics", err)
+        setTrendingTopics([])
+      }
+    }
+    fetchTrending()
+  }, [])
+
+  const analyzeTrend = async (kw: string) => {
+    if (!kw) return
+    setIsLoading(true)
+    setError("")
+    try {
+      const res = await api.get(`/trends/keyword`, { params: { keyword: kw } })
+      setTrendData(res.data)
+      setAiDirections([])
+      setAiError("")
+      setHasGeneratedDirections(false)
+    } catch (err: any) {
+      console.error(err)
+      if (err.response?.status === 504) setError("External API timeout. The source may be slow — please try again.")
+      else if (err.response?.status === 429) setError("Rate limit exceeded. Please wait a moment and try again.")
+      else setError(err.response?.data?.message || "Failed to analyze keyword trend.")
+      setTrendData(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    analyzeTrend(keyword)
+  }
+
+  const cleanDoi = (doi?: string | null) =>
+    String(doi || "").trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")
+
+  const getDoiUrl = (doi?: string | null) => {
+    const value = cleanDoi(doi)
+    return value ? `https://doi.org/${value}` : ""
+  }
+
+  const getSourceUrl = (paper: any) => paper?.url || getDoiUrl(paper?.doi)
+
+  const isMongoObjectId = (value: string) => /^[a-f\d]{24}$/i.test(value)
+
+  const getEvidenceId = (paper: any, fallback?: string | number) =>
+    String(paper?._id || paper?.id || paper?.doi || paper?.url || paper?.title || fallback || "")
+
+  const toBackendSource = (paperSource?: string | null) => {
+    const value = String(paperSource || "openalex").toLowerCase().replace(/[-\s]/g, "_")
+    if (value === "semanticscholar") return "semantic_scholar"
+    return value
+  }
+
+  const normalizeOpportunityScore = (score: any) => {
+    const value = Number(score)
+    if (!Number.isFinite(value)) return null
+    return Math.round(value > 1 ? value : value * 100)
+  }
+
+  const getDirectionTitle = (direction: any) => direction.title || direction.direction || "Research direction"
+
+  const getDirectionWhy = (direction: any) => direction.why || direction.rationale || "This direction has matching research evidence from academic sources."
+
+  const getDirectionKeywords = (direction: any) => direction.relatedKeywords || direction.keywords || []
+
+  const buildSavablePaper = (paper: any) => {
+    const normalizedSource = toBackendSource(paper.source)
+    const externalIds: Record<string, string> = {}
+    if (paper.id) {
+      if (normalizedSource === "openalex") externalIds.openalex = paper.id
+      if (normalizedSource === "semantic_scholar") externalIds.semanticScholar = paper.id
+      if (normalizedSource === "crossref") externalIds.crossref = paper.id
+      if (normalizedSource === "arxiv") externalIds.arxiv = paper.id
+      if (normalizedSource === "ieee") externalIds.ieee = paper.id
+      if (normalizedSource === "exa") externalIds.exa = paper.id
+    }
+
+    return {
+      title: formatText(paper.title, "Untitled paper"),
+      abstract: formatText(paper.abstract, "").slice(0, 5000),
+      doi: cleanDoi(paper.doi) || undefined,
+      publishedDate: paper.publishedDate || undefined,
+      publicationYear: paper.publicationYear || undefined,
+      citationCount: paper.citationCount || 0,
+      authors: (paper.authors || []).map((author: any, index: number) => ({
+        name: author.name || "Unknown",
+        externalId: author.authorId || undefined,
+        order: index + 1,
+      })),
+      journalName: paper.journalName || undefined,
+      source: normalizedSource,
+      url: paper.url || undefined,
+      pdfUrl: paper.pdfUrl || undefined,
+      externalIds,
+    }
+  }
+
+  const ensureEvidencePaperInDatabase = async (paper: any, evidenceId: string, showDetailLoading = false) => {
+    const paperId = String(paper?._id || paper?.id || "")
+    if (paperId && isMongoObjectId(paperId)) {
+      return paperId
+    }
+    if (!localStorage.getItem("token")) {
+      navigate("/login")
+      return null
+    }
+
+    if (showDetailLoading) setSavingEvidenceId(evidenceId)
+    try {
+      const res = await api.post("/papers", { paper: buildSavablePaper(paper) })
+      const databasePaperId = res.data.paper?._id || res.data.paper?.id
+      if (databasePaperId) return databasePaperId
+      setAiError("Could not open details because the paper was not saved into the database.")
+      return null
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        navigate("/login")
+        return null
+      }
+      setAiError(err.response?.data?.message || "Could not save this evidence paper before opening details.")
+      return null
+    } finally {
+      if (showDetailLoading) setSavingEvidenceId(null)
+    }
+  }
+
+  const openEvidenceDetails = async (paper: any, evidenceId: string) => {
+    setAiError("")
+    const databasePaperId = await ensureEvidencePaperInDatabase(paper, evidenceId, true)
+    if (databasePaperId) navigate(`/papers/${databasePaperId}`)
+  }
+
+  const saveEvidencePaper = async (paper: any, evidenceId: string) => {
+    if (!localStorage.getItem("token")) {
+      navigate("/login")
