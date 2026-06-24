@@ -757,28 +757,45 @@ const getRelatedKeywordsTrend = async (req, res, next) => {
     let papers = [];
     const normalizedSource = source.trim().toLowerCase();
 
+    if (normalizedSource === 'openalex') {
+      // OpenAlex computes true frequencies and yearly co-trends over the ENTIRE
+      // matched corpus via group_by (not a 100-paper sample), so return its
+      // pre-aggregated stats directly.
+      const result = await academicApiService.getRelatedKeywordsTrend('openalex', keyword, startYearNum);
+      return res.status(200).json({
+        success: true,
+        keyword,
+        source: normalizedSource,
+        totalPapers: result.totalPapers || 0,
+        topKeywords: result.topKeywords || [],
+        trends: result.trends || [],
+        papers: (result.papers || []).map(p => ({
+          title: p.title,
+          year: p.year,
+          citationCount: p.citationCount,
+          keywords: p.keywords
+        }))
+      });
+    }
+
     if (normalizedSource === 'local') {
       // Local database search: find matching papers
       const filter = {
         $text: { $search: keyword.trim() },
         publicationYear: { $gte: startYearNum, $lte: currentYear }
       };
-      
+
       const localPapers = await Paper.find(filter)
         .sort({ citationCount: -1 })
         .limit(100)
         .select('title publicationYear citationCount keywords');
-        
+
       papers = localPapers.map(p => ({
         title: p.title,
         year: p.publicationYear || null,
         citationCount: p.citationCount || 0,
         keywords: p.keywords || []
       }));
-    } else if (normalizedSource === 'openalex') {
-      // Fetch from OpenAlex API
-      const result = await academicApiService.getRelatedKeywordsTrend('openalex', keyword, startYearNum);
-      papers = result.papers || [];
     } else {
       return res.status(400).json({
         success: false,
