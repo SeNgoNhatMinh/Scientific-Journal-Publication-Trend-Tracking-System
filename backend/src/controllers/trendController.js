@@ -741,6 +741,181 @@ const getAlgorithmDomains = async (req, res, next) => {
   }
 };
 
+const getRelatedKeywordsTrend = async (req, res, next) => {
+  try {
+    const { source = 'openalex', keyword, startYear = 2010 } = req.query;
+    const currentYear = new Date().getFullYear();
+    const startYearNum = parseInt(startYear, 10) || 2010;
+
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Keyword is required',
+      });
+    }
+
+    let papers = [];
+    const normalizedSource = source.trim().toLowerCase();
+
+    if (normalizedSource === 'openalex') {
+      // OpenAlex computes true frequencies and yearly co-trends over the ENTIRE
+      // matched corpus via group_by (not a 100-paper sample), so return its
+      // pre-aggregated stats directly.
+      const result = await academicApiService.getRelatedKeywordsTrend('openalex', keyword, startYearNum);
+      return res.status(200).json({
+        success: true,
+        keyword,
+        source: normalizedSource,
+        totalPapers: result.totalPapers || 0,
+        topKeywords: result.topKeywords || [],
+        trends: result.trends || [],
+        papers: (result.papers || []).map(p => ({
+          title: p.title,
+          year: p.year,
+          citationCount: p.citationCount,
+          keywords: p.keywords
+        }))
+      });
+    }
+
+    if (normalizedSource === 'local') {
+      // Local database search: find matching papers
+      const filter = {
+        $text: { $search: keyword.trim() },
+        publicationYear: { $gte: startYearNum, $lte: currentYear }
+      };
+
+      const localPapers = await Paper.find(filter)
+        .sort({ citationCount: -1 })
+        .limit(100)
+        .select('title publicationYear citationCount keywords');
+
+      papers = localPapers.map(p => ({
+        title: p.title,
+        year: p.publicationYear || null,
+        citationCount: p.citationCount || 0,
+        keywords: p.keywords || []
+      }));
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Unsupported source. Use "openalex" or "local".'
+      });
+    }
+
+    // Statistical aggregation:
+    // 1. Calculate overall frequency of each keyword
+    const keywordFreq = {};
+    papers.forEach(paper => {
+      // Lowercase/normalize keywords to avoid duplicates due to casing
+      const seenInPaper = new Set();
+      (paper.keywords || []).forEach(kw => {
+        const normalized = kw.trim().toLowerCase();
+        if (!normalized || normalized === keyword.trim().toLowerCase()) return; // Skip search query itself
+        seenInPaper.add(normalized);
+      });
+
+      seenInPaper.forEach(normalized => {
+        keywordFreq[normalized] = (keywordFreq[normalized] || 0) + 1;
+      });
+    });
+
+    // Sort to find the top keywords
+    const topKeywordsList = Object.entries(keywordFreq)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10); // Take top 10 related keywords
+
+    const topKeywordNames = topKeywordsList.map(item => item.name);
+
+    // Initialize yearly trend counts for top keywords
+    // We want a list of objects per year from startYearNum to currentYear
+    const yearlyDataMap = new Map();
+    for (let y = startYearNum; y <= currentYear; y++) {
+      const yearObj = { year: y };
+      topKeywordNames.forEach(name => {
+        yearObj[name] = 0;
+      });
+      yearlyDataMap.set(y, yearObj);
+    }
+
+    // Fill yearly counts
+    papers.forEach(paper => {
+      const paperYear = paper.year;
+      if (paperYear && paperYear >= startYearNum && paperYear <= currentYear) {
+        const yearObj = yearlyDataMap.get(paperYear);
+        if (yearObj) {
+          const seenInPaper = new Set();
+          (paper.keywords || []).forEach(kw => {
+            const normalized = kw.trim().toLowerCase();
+            if (topKeywordNames.includes(normalized)) {
+              seenInPaper.add(normalized);
+            }
+          });
+          seenInPaper.forEach(normalized => {
+            yearObj[normalized] += 1;
+          });
+        }
+      }
+    });
+
+    const trends = Array.from(yearlyDataMap.values());
+
+    // Capitalize keywords for display, mapping normalized names back to a readable format
+    // Find the original casing for each top keyword (from the paper lists)
+    const displayNameMap = {};
+    papers.forEach(paper => {
+      (paper.keywords || []).forEach(kw => {
+        const normalized = kw.trim().toLowerCase();
+        if (topKeywordNames.includes(normalized) && !displayNameMap[normalized]) {
+          // Store the original casing
+          displayNameMap[normalized] = kw;
+        }
+      });
+    });
+    
+    // Fallback to name if not found
+    topKeywordNames.forEach(name => {
+      if (!displayNameMap[name]) {
+        displayNameMap[name] = name;
+      }
+    });
+
+    // Reformat output trends keys and top keywords list with display names
+    const formattedTrends = trends.map(t => {
+      const newObj = { year: t.year };
+      topKeywordNames.forEach(name => {
+        newObj[displayNameMap[name]] = t[name];
+      });
+      return newObj;
+    });
+
+    const formattedTopKeywords = topKeywordsList.map(item => ({
+      keyword: displayNameMap[item.name],
+      count: item.count,
+      percentage: papers.length > 0 ? ((item.count / papers.length) * 100).toFixed(1) : '0.0'
+    }));
+
+    res.status(200).json({
+      success: true,
+      keyword,
+      source: normalizedSource,
+      totalPapers: papers.length,
+      topKeywords: formattedTopKeywords,
+      trends: formattedTrends,
+      papers: papers.map(p => ({
+        title: p.title,
+        year: p.year,
+        citationCount: p.citationCount,
+        keywords: p.keywords
+      }))
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getTrendData,
   compareTrends,
@@ -751,4 +926,6 @@ module.exports = {
   getKeywordCategories,
   getKeywordGraph,
   getAlgorithmDomains,
+  getRelatedKeywordsTrend,
 };
+

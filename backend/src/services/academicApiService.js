@@ -1098,10 +1098,126 @@ const getAuthorInfo = async (source, query) => {
   throw new Error(`Author lookup is not supported for source: ${normalizedSource}`);
 };
 
+const getRelatedKeywordsTrend = async (source, keyword, startYear = 2010) => {
+  const normalizedSource = normalizeSource(source);
+  const currentYear = new Date().getFullYear();
+
+  if (normalizedSource !== 'openalex') {
+    throw new Error(`Related keywords trend is currently only supported for OpenAlex (requested: ${normalizedSource})`);
+  }
+
+  const baseFilter = `publication_year:${startYear}-${currentYear},type:article`;
+  const normalizedQuery = keyword.trim().toLowerCase();
+
+  // Keep only meaningful co-occurring keywords: drop OpenAlex's "unknown" bucket
+  // and the search term itself so it doesn't dominate its own related list.
+  const isMeaningful = (entry) => {
+    const key = String(entry.key || '');
+    const name = entry.key_display_name || '';
+    if (!name) return false;
+    if (/\/unknown$/i.test(key) || name.toLowerCase() === 'unknown') return false;
+    if (name.trim().toLowerCase() === normalizedQuery) return false;
+    return true;
+  };
+
+  try {
+    // 1) True keyword frequencies aggregated over the ENTIRE matched corpus
+    //    (group_by counts every matching work, not just a 100-paper sample).
+    const freqResp = await openAlexClient.get('/works', {
+      params: withOpenAlexParams({
+        search: keyword,
+        filter: baseFilter,
+        group_by: 'keywords.id',
+        // group_by buckets are capped by per_page — request the max so we get
+        // the full ranking, not just the single top group.
+        per_page: 200,
+      }),
+    });
+
+    const totalPapers = freqResp.data.meta?.count || 0;
+    const groups = (freqResp.data.group_by || []).filter(isMeaningful);
+
+    const topKeywords = groups.slice(0, 10).map(g => ({
+      keyword: g.key_display_name,
+      // Short id form (e.g. "keywords/internet-of-things") for use in filters.
+      keyId: String(g.key).replace(/^https?:\/\/openalex\.org\//i, ''),
+      count: g.count,
+      percentage: totalPapers > 0 ? ((g.count / totalPapers) * 100).toFixed(1) : '0.0',
+    }));
+
+    // 2) True yearly co-trends: for each top keyword, count how many of the
+    //    matching papers per year also carry that keyword (whole corpus, not a sample).
+    const yearlyResults = await Promise.all(
+      topKeywords.map(async (kw) => {
+        try {
+          const resp = await openAlexClient.get('/works', {
+            params: withOpenAlexParams({
+              search: keyword,
+              filter: `${baseFilter},keywords.id:${kw.keyId}`,
+              group_by: 'publication_year',
+              // Need all year buckets (~18), not just the top one.
+              per_page: 200,
+            }),
+          });
+          const byYear = {};
+          (resp.data.group_by || []).forEach(g => {
+            const y = parseInt(g.key, 10);
+            if (!Number.isNaN(y)) byYear[y] = g.count;
+          });
+          return { keyword: kw.keyword, byYear };
+        } catch (e) {
+          return { keyword: kw.keyword, byYear: {} };
+        }
+      })
+    );
+
+    const trends = [];
+    for (let y = startYear; y <= currentYear; y++) {
+      const row = { year: y };
+      yearlyResults.forEach(r => { row[r.keyword] = r.byYear[y] || 0; });
+      trends.push(row);
+    }
+
+    // 3) Sample publications for the display list only (decoupled from the stats above).
+    const papersResp = await openAlexClient.get('/works', {
+      params: withOpenAlexParams({
+        search: keyword,
+        filter: baseFilter,
+        per_page: 100,
+        select: 'title,publication_year,keywords,cited_by_count',
+        sort: 'cited_by_count:desc',
+      }),
+    });
+    const papers = (papersResp.data.results || []).map(work => ({
+      title: work.title || 'Untitled',
+      year: work.publication_year || null,
+      citationCount: work.cited_by_count || 0,
+      keywords: (work.keywords || [])
+        .map(k => k.display_name || k)
+        .filter(Boolean)
+        .slice(0, 15),
+    }));
+
+    return {
+      source: normalizedSource,
+      keyword,
+      totalPapers,
+      // Strip the internal keyId before returning to the controller/client.
+      topKeywords: topKeywords.map(({ keyword, count, percentage }) => ({ keyword, count, percentage })),
+      trends,
+      papers,
+    };
+  } catch (error) {
+    toProviderError('OpenAlex', error);
+  }
+};
+
 module.exports = {
   searchPapers,
   getTrendData,
   getJournalInfo,
   getAuthorInfo,
   normalizeSource,
+  getRelatedKeywordsTrend,
 };
+

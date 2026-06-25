@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
   ArrowLeft, Plus, Loader2, Search, GitBranch, FileText, StickyNote,
-  TrendingUp, Bell, Users, Database, BellRing, BellOff,
+  TrendingUp, Bell, Users, Database, BellRing, BellOff, Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -349,6 +349,16 @@ export default function WorkspaceDetailsPage() {
     }
   }
 
+  const handleDeleteWorkspace = async () => {
+    if (!window.confirm("Are you sure you want to delete this workspace? This action cannot be undone.")) return
+    try {
+      await api.delete(`/workspaces/${id}`)
+      navigate("/workspaces")
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete workspace.")
+    }
+  }
+
   const formatAuthors = (authors: any, paperSource?: string) => {
     if (!authors || authors.length === 0) {
       return paperSource === "exa" ? "Authors not available from Exa" : "Unknown authors"
@@ -403,6 +413,11 @@ export default function WorkspaceDetailsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isOwner && (
+            <Button variant="destructive" size="sm" className="gap-2 rounded-xl" onClick={handleDeleteWorkspace}>
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
           {canEdit && (
             <Dialog open={corpusOpen} onOpenChange={setCorpusOpen}>
               <DialogTrigger asChild>
