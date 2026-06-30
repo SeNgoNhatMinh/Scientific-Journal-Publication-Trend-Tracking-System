@@ -710,7 +710,7 @@ export default function TrendsPage() {
                     max={new Date().getFullYear()}
                     value={relStartYear}
                     onChange={(e) => setRelStartYear(e.target.value)}
-                    className="w-10 bg-transparent border-none p-0 text-sm focus:outline-none focus:ring-0 text-foreground font-semibold text-center"
+                    className="w-14 bg-transparent border-none p-0 text-sm focus:outline-none focus:ring-0 text-foreground font-semibold text-center"
                   />
                 </div>
 
@@ -776,9 +776,16 @@ export default function TrendsPage() {
 
                 {/* Papers List with Keywords */}
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-sm flex items-center gap-1.5">
-                    <Search className="h-4 w-4 text-primary" /> Extracted Publications ({relData.papers?.length || 0})
-                  </h3>
+                  <div className="space-y-0.5">
+                    <h3 className="font-semibold text-sm flex items-center gap-1.5">
+                      <Search className="h-4 w-4 text-primary" /> Extracted Publications ({relData.papers?.length || 0})
+                    </h3>
+                    {relData.source === "openalex" && (
+                      <p className="text-[10px] text-muted-foreground/70">
+                        Sample of the top 100 most-cited papers — for reference only. Frequencies and the chart above are computed over the full matched corpus ({relData.totalPapers?.toLocaleString?.() ?? relData.totalPapers} papers).
+                      </p>
+                    )}
+                  </div>
                   <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                     {relData.papers && relData.papers.length > 0 ? (
                       relData.papers.map((paper: any, i: number) => (
