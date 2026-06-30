@@ -1,268 +1,320 @@
-import { useMemo, useState, useEffect } from "react"
-import { useSearchParams } from "react-router-dom"
-import ForceGraph2D from "react-force-graph-2d"
-import ForceGraph3D from "react-force-graph-3d"
+import { useState, useCallback, useMemo } from "react"
 import {
-  ArrowRight,
   BarChart3,
-  BrainCircuit,
-  FileText,
-  GitBranch,
-  Layers3,
-  Loader2,
-  Search,
-  Sparkles,
-  Target,
-  Zap,
   TrendingUp,
-  Minus,
   TrendingDown,
+  Minus,
+  Building2,
+  Users,
+  Loader2,
+  Sparkles,
+  Zap,
+  Cloud,
+  LayoutList,
+  CalendarRange,
+  FileText,
+  Award,
+  ArrowUpRight,
+  Flame,
+  Search,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import {
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  Legend,
+  Cell,
+} from "recharts"
 import api from "@/lib/api"
-import { formatText } from "@/lib/format"
 import { motion, AnimatePresence } from "framer-motion"
 
-const CATEGORY_COLORS: Record<string, string> = {
-  domain:      "#3b82f6",
-  algorithm:   "#ef4444",
-  application: "#22c55e",
-  method:      "#a855f7",
-  dataset:     "#f97316",
-  tool:        "#06b6d4",
-  general:     "#6b7280",
-}
+// ─── Design tokens ───
+const CHART_COLORS = [
+  "oklch(0.65 0.25 285)",
+  "oklch(0.65 0.23 140)",
+  "oklch(0.65 0.22 40)",
+  "oklch(0.65 0.18 200)",
+  "oklch(0.7 0.18 80)",
+  "oklch(0.65 0.22 345)",
+  "oklch(0.65 0.18 170)",
+  "oklch(0.6 0.23 310)",
+  "oklch(0.58 0.20 270)",
+  "oklch(0.60 0.15 120)",
+]
 
-const CATEGORY_TITLES: Record<string, string> = {
-  domain:      "Domains",
-  algorithm:   "Algorithms",
-  application: "Applications",
-  method:      "Methods",
-  dataset:     "Datasets",
-  tool:        "Tools",
-  general:     "General",
-}
+const LINE_COLORS = [
+  "#a78bfa", "#34d399", "#fbbf24", "#60a5fa", "#f472b6",
+  "#2dd4bf", "#fb923c", "#818cf8", "#a3e635", "#e879f9",
+]
 
-const CATEGORY_BADGE_COLORS: Record<string, string> = {
-  domain:      "border-blue-500/30 bg-blue-500/10 text-blue-400",
-  algorithm:   "border-red-500/30 bg-red-500/10 text-red-400",
+const WORD_CLOUD_COLORS = [
+  "oklch(0.70 0.25 285)",
+  "oklch(0.68 0.20 200)",
+  "oklch(0.72 0.22 340)",
+  "oklch(0.70 0.18 150)",
+  "oklch(0.75 0.20 55)",
+  "oklch(0.65 0.22 120)",
+  "oklch(0.68 0.24 310)",
+  "oklch(0.72 0.16 170)",
+]
+
+const CATEGORY_BADGE: Record<string, string> = {
+  domain: "border-blue-500/30 bg-blue-500/10 text-blue-400",
+  algorithm: "border-red-500/30 bg-red-500/10 text-red-400",
   application: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-  method:      "border-purple-500/30 bg-purple-500/10 text-purple-400",
-  dataset:     "border-orange-500/30 bg-orange-500/10 text-orange-400",
-  tool:        "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",
-  general:     "border-slate-500/30 bg-slate-500/10 text-slate-400",
+  method: "border-purple-500/30 bg-purple-500/10 text-purple-400",
+  dataset: "border-orange-500/30 bg-orange-500/10 text-orange-400",
+  tool: "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",
+  general: "border-slate-500/30 bg-slate-500/10 text-slate-400",
 }
 
-const TREND_CONFIG = {
-  exploding: { label: "Exploding", icon: Zap, cls: "trend-exploding", badgeCls: "bg-orange-500/10 text-orange-400 border-orange-500/30" },
-  growing:   { label: "Growing",   icon: TrendingUp, cls: "trend-growing", badgeCls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  stable:    { label: "Stable",    icon: Minus, cls: "trend-stable", badgeCls: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" },
-  declining: { label: "Declining", icon: TrendingDown, cls: "trend-declining", badgeCls: "bg-slate-500/10 text-slate-400 border-slate-500/30" },
-} as Record<string, any>
-
-function parseGrowth(value: unknown) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
+// ─── Types ───
+interface TopicItem {
+  name: string
+  normalizedText: string
+  category: string
+  count: number
 }
 
-function keywordName(item: any) {
-  return item?.name || item?.normalizedText || item?.keyword || item?.label || ""
+interface TrendItem {
+  name: string
+  normalizedText: string
+  category: string
+  totalCount: number
+  yearlyData: { year: number; count: number }[]
+  growthRate: number
+  avgGrowthRate: number
+  isEmerging: boolean
 }
 
+interface AffiliationItem {
+  affiliation: string
+  country?: string | null
+  paperCount: number
+  authorCount: number
+  topAuthors: string[]
+}
+
+interface AuthorItem {
+  name: string
+  paperCount: number
+  affiliation: string
+}
+
+// ─── Custom Recharts Tooltip ───
+function InsightTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="glass rounded-lg px-3 py-2 border border-border/50 text-sm shadow-xl">
+      <p className="font-semibold mb-1 text-foreground">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} style={{ color: p.color }} className="text-xs">
+          {p.name || p.dataKey}: <span className="font-semibold">{p.value?.toLocaleString()}</span>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+// ─── Word Cloud Component ───
+function WordCloud({ keywords }: { keywords: TopicItem[] }) {
+  if (!keywords.length) {
+    return (
+      <div className="flex items-center justify-center h-48 text-sm text-muted-foreground italic">
+        Chưa có dữ liệu từ khóa
+      </div>
+    )
+  }
+
+  const maxCount = Math.max(...keywords.map(k => k.count), 1)
+  const minCount = Math.min(...keywords.map(k => k.count), 0)
+  const range = maxCount - minCount || 1
+
+  // Shuffle for organic look
+  const shuffled = useMemo(() => {
+    const arr = [...keywords]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
+  }, [keywords])
+
+  return (
+    <div className="word-cloud">
+      {shuffled.map((kw, idx) => {
+        const t = (kw.count - minCount) / range // 0..1
+        const fontSize = 0.7 + t * 1.8 // 0.7rem to 2.5rem
+        const opacity = 0.5 + t * 0.5
+        const color = WORD_CLOUD_COLORS[idx % WORD_CLOUD_COLORS.length]
+        return (
+          <motion.span
+            key={kw.normalizedText || kw.name}
+            className="word-cloud-item"
+            style={{ fontSize: `${fontSize}rem`, color, opacity }}
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity, scale: 1 }}
+            transition={{ delay: idx * 0.03, duration: 0.35 }}
+            title={`${kw.name}: ${kw.count} papers (${kw.category})`}
+          >
+            {kw.name}
+          </motion.span>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Ranking Medal ───
+function RankMedal({ rank }: { rank: number }) {
+  if (rank === 1) return <div className="ranking-medal gold">1</div>
+  if (rank === 2) return <div className="ranking-medal silver">2</div>
+  if (rank === 3) return <div className="ranking-medal bronze">3</div>
+  return (
+    <div className="ranking-medal" style={{ background: "oklch(0.30 0.02 270)", color: "oklch(0.70 0.02 270)" }}>
+      {rank}
+    </div>
+  )
+}
+
+// ─── Year Selector ───
+function YearSelect({
+  value,
+  onChange,
+  id,
+  label,
+}: {
+  value: number
+  onChange: (v: number) => void
+  id: string
+  label: string
+}) {
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: currentYear - 2000 + 1 }, (_, i) => currentYear - i)
+
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor={id} className="text-xs text-muted-foreground whitespace-nowrap">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="h-9 px-3 rounded-lg bg-muted/40 border border-border/50 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none cursor-pointer"
+      >
+        {years.map(y => (
+          <option key={y} value={y}>
+            {y}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════
 export default function InsightsPage() {
-  const [keyword, setKeyword] = useState("mamba")
-  const [searchedKeyword, setSearchedKeyword] = useState("")
-  const [trendData, setTrendData] = useState<any>(null)
-  const [categories, setCategories] = useState<Record<string, any[]>>({})
-  const [algorithmDomains, setAlgorithmDomains] = useState<any[]>([])
-  const [papers, setPapers] = useState<any[]>([])
+  const currentYear = new Date().getFullYear()
+  const [keyword, setKeyword] = useState("")
+  const [startYear, setStartYear] = useState(currentYear - 5)
+  const [endYear, setEndYear] = useState(currentYear)
   const [isLoading, setIsLoading] = useState(false)
-  const [isCreatingCorpus, setIsCreatingCorpus] = useState(false)
   const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
+  const [activeSource, setActiveSource] = useState<"openalex" | "local">("local")
 
-  const [searchParams] = useSearchParams()
-  const runIdParam = searchParams.get("runId")
-  const keywordParam = searchParams.get("keyword")
+  // Section 1: Top Topics & Keywords
+  const [topics, setTopics] = useState<TopicItem[]>([])
+  const [keywords, setKeywords] = useState<TopicItem[]>([])
+  const [totalPapers, setTotalPapers] = useState(0)
 
-  const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] })
-  const [graphMode, setGraphMode] = useState<"2d" | "3d">("3d")
-  const [activeRunId, setActiveRunId] = useState<string>("")
+  // Section 2: Emerging Trends
+  const [trends, setTrends] = useState<TrendItem[]>([])
 
-  const opportunityCards = useMemo(() => {
-    const topAlgorithm = keywordName(categories.algorithm?.[0])
-    const topDomain = keywordName(categories.domain?.[0])
-    const topApplication = keywordName(categories.application?.[0])
-    const topMethod = keywordName(categories.method?.[0])
-    const pair = algorithmDomains[0]
-    const cards = []
+  // Section 3: Top Affiliations
+  const [affiliations, setAffiliations] = useState<AffiliationItem[]>([])
+  const [authors, setAuthors] = useState<AuthorItem[]>([])
 
-    if (pair?.algorithm && pair?.domain) {
-      cards.push({
-        title: `${pair.algorithm} in ${pair.domain}`,
-        type: "Algorithm-domain pair",
-        why: `This pair appears together in ${pair.paperCount || 0} stored papers, making it a concrete research intersection.`,
-        next: `Search recent papers around "${pair.algorithm} ${pair.domain}" and look for unresolved evaluation gaps.`,
-      })
-    }
-    if (topAlgorithm && topApplication) {
-      cards.push({
-        title: `${topAlgorithm} for ${topApplication}`,
-        type: "Technique application",
-        why: `This combines a detected algorithm with a detected application, closer to an actual paper topic than a single keyword.`,
-        next: `Check whether existing papers focus on accuracy, efficiency, robustness, or real-world deployment.`,
-      })
-    }
-    if (topDomain && topMethod) {
-      cards.push({
-        title: `${topMethod} in ${topDomain}`,
-        type: "Method-domain niche",
-        why: `Methods become valuable when tied to a domain. This direction can become a focused research question.`,
-        next: `Build a corpus for this phrase and compare publication growth over the last 3-5 years.`,
-      })
-    }
-    if (searchedKeyword) {
-      cards.push({
-        title: `Map sub-topics under "${searchedKeyword}"`,
-        type: "Exploration path",
-        why: `If the input is broad, the system should reveal smaller sub-keywords instead of returning a generic paper list.`,
-        next: `Create a corpus for "${searchedKeyword}", then refresh this page to get evidence from stored metadata.`,
-      })
-    }
-    return cards.slice(0, 4)
-  }, [algorithmDomains, categories, searchedKeyword])
+  const [hasLoaded, setHasLoaded] = useState(false)
 
-  const performAnalysis = async (seedValue: string, overrideRunId?: string) => {
-    if (!seedValue) return
+  // Active tab for section 1
+  const [topicsView, setTopicsView] = useState<"chart" | "cloud">("chart")
 
+  const fetchInsights = useCallback(async () => {
     setIsLoading(true)
     setError("")
-    setMessage("")
-    setSearchedKeyword(seedValue)
+
+    const trimmedKeyword = keyword.trim()
+    const params: Record<string, string | number> = { startYear, endYear }
+    if (trimmedKeyword) params.keyword = trimmedKeyword
+    setActiveSource(trimmedKeyword ? "openalex" : "local")
 
     try {
-      let activeRun = overrideRunId || ""
-      if (!activeRun && seedValue) {
-        try {
-          const runsRes = await api.get("/corpus/runs", { params: { limit: 100 } })
-          const matchingRun = (runsRes.data.runs || []).find(
-            (r: any) => r.seedKeyword.toLowerCase() === seedValue.toLowerCase() && r.status === "completed"
-          )
-          if (matchingRun) activeRun = matchingRun._id
-        } catch (err) {
-          console.error("Failed to check existing corpus runs", err)
-        }
-      }
-      setActiveRunId(activeRun)
+      const [topTopicsRes, emergingRes, affiliationsRes] = await Promise.allSettled([
+        api.get("/trends/insights/top-topics", { params }),
+        api.get("/trends/insights/emerging-trends", { params }),
+        api.get("/trends/insights/top-affiliations", { params }),
+      ])
 
-      const categoriesParams: any = { limit: 8 }
-      const domainsParams: any = { limit: 8, paperLimit: 500 }
-      const graphParams: any = { limit: 50, paperLimit: 300 }
-
-      if (activeRun) {
-        categoriesParams.analysisRunId = activeRun
-        domainsParams.analysisRunId = activeRun
-        graphParams.analysisRunId = activeRun
+      if (topTopicsRes.status === "fulfilled") {
+        setTopics(topTopicsRes.value.data.topics || [])
+        setKeywords(topTopicsRes.value.data.keywords || [])
+        setTotalPapers(topTopicsRes.value.data.totalPapers || 0)
       }
 
-      const [trendRes, algorithmRes, domainRes, applicationRes, methodRes, pairRes, paperRes, graphRes] =
-        await Promise.allSettled([
-          api.get("/trends/keyword", { params: { keyword: seedValue } }),
-          api.get("/trends/keyword-categories", { params: { category: "algorithm", ...categoriesParams } }),
-          api.get("/trends/keyword-categories", { params: { category: "domain", ...categoriesParams } }),
-          api.get("/trends/keyword-categories", { params: { category: "application", ...categoriesParams } }),
-          api.get("/trends/keyword-categories", { params: { category: "method", ...categoriesParams } }),
-          api.get("/trends/algorithm-domains", { params: domainsParams }),
-          api.get("/sources/search", { params: { source: "openalex", keyword: seedValue, limit: 5 } }),
-          activeRun
-            ? api.get("/trends/keyword-graph", { params: graphParams })
-            : Promise.reject(new Error("No active run for graph")),
-        ])
-
-      if (trendRes.status === "fulfilled") setTrendData(trendRes.value.data)
-      else setTrendData(null)
-
-      setCategories({
-        algorithm: algorithmRes.status === "fulfilled" ? algorithmRes.value.data.keywords || [] : [],
-        domain: domainRes.status === "fulfilled" ? domainRes.value.data.keywords || [] : [],
-        application: applicationRes.status === "fulfilled" ? applicationRes.value.data.keywords || [] : [],
-        method: methodRes.status === "fulfilled" ? methodRes.value.data.keywords || [] : [],
-      })
-      setAlgorithmDomains(pairRes.status === "fulfilled" ? pairRes.value.data.pairs || [] : [])
-      setPapers(paperRes.status === "fulfilled" ? paperRes.value.data.papers || [] : [])
-
-      if (graphRes.status === "fulfilled") {
-        const nodes = (graphRes.value.data.nodes || []).map((n: any) => ({
-          ...n,
-          val: n.paperCount || 1,
-          color: CATEGORY_COLORS[n.category] || CATEGORY_COLORS.general,
-        }))
-        const links = (graphRes.value.data.edges || []).map((e: any) => ({
-          source: e.source,
-          target: e.target,
-          value: e.weight || 1,
-        }))
-        setGraphData({ nodes, links })
-      } else {
-        setGraphData({ nodes: [], links: [] })
+      if (emergingRes.status === "fulfilled") {
+        setTrends(emergingRes.value.data.trends || [])
       }
 
-      const allFailed = [trendRes, algorithmRes, domainRes, applicationRes, methodRes, pairRes, paperRes].every(
-        (result) => result.status === "rejected"
-      )
-      if (allFailed) setError("Could not load research insights. Check backend/API configuration.")
-    } catch (err) {
-      console.error(err)
-      setError("An unexpected error occurred during analysis.")
+      if (affiliationsRes.status === "fulfilled") {
+        setAffiliations(affiliationsRes.value.data.affiliations || [])
+        setAuthors(affiliationsRes.value.data.authors || [])
+      }
+
+      const allFailed = [topTopicsRes, emergingRes, affiliationsRes].every(r => r.status === "rejected")
+      if (allFailed) {
+        setError("Không thể tải dữ liệu Insight. Kiểm tra kết nối backend.")
+      }
+
+      setHasLoaded(true)
+    } catch {
+      setError("Đã xảy ra lỗi không mong đợi.")
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [keyword, startYear, endYear])
 
-  const analyzeKeyword = () => performAnalysis(keyword.trim())
-
-  const createCorpus = async () => {
-    const seed = keyword.trim()
-    if (!seed) return
-    setIsCreatingCorpus(true)
-    setError("")
-    setMessage("")
-    try {
-      const res = await api.post("/corpus/runs", {
-        seedKeyword: seed,
-        source: "openalex",
-        startYear: new Date().getFullYear() - 5,
-        endYear: new Date().getFullYear(),
-        maxPages: 2,
-        perPage: 25,
+  // Prepare line chart data from trends
+  const lineChartData = useMemo(() => {
+    if (!trends.length) return []
+    const allYears = new Set<number>()
+    trends.forEach(t => t.yearlyData.forEach(d => allYears.add(d.year)))
+    const sortedYears = Array.from(allYears).sort()
+    return sortedYears.map(year => {
+      const point: Record<string, any> = { year }
+      trends.slice(0, 8).forEach(t => {
+        const found = t.yearlyData.find(d => d.year === year)
+        point[t.name] = found?.count || 0
       })
-      setMessage(
-        `Corpus started for "${seed}". Wait until it completes, then run Analyze again. Run ID: ${res.data.run?._id || res.data.runId}`
-      )
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Could not start corpus run.")
-    } finally {
-      setIsCreatingCorpus(false)
-    }
-  }
+      return point
+    })
+  }, [trends])
 
-  useEffect(() => {
-    if (keywordParam || runIdParam) {
-      const activeKeyword = keywordParam || ""
-      if (activeKeyword) setKeyword(activeKeyword)
-      performAnalysis(activeKeyword || keyword, runIdParam || undefined)
-    }
-  }, [keywordParam, runIdParam])
-
-  const hasResults = Boolean(searchedKeyword)
-  const growth = parseGrowth(trendData?.averageGrowthRate)
-  const trendConf = TREND_CONFIG[trendData?.trendStatus] ?? null
+  const trendNames = useMemo(() => trends.slice(0, 8).map(t => t.name), [trends])
 
   return (
     <div className="w-full p-4 md:p-8 space-y-6">
-      {/* Header */}
+      {/* ═══ Header ═══ */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -270,75 +322,93 @@ export default function InsightsPage() {
         className="max-w-5xl"
       >
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
-          <BrainCircuit className="h-7 w-7 text-primary" />
-          Research Opportunity Finder
+          <Sparkles className="h-7 w-7 text-primary" />
+          Research Insights
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Enter a keyword or domain. This page turns paper metadata into actionable research directions.
+          Phân tích xu hướng nghiên cứu khoa học — Top chủ đề, từ khóa mới nổi, và tổ chức dẫn đầu từ metadata bài báo.
         </p>
+        {hasLoaded && (
+          <div className="mt-2">
+            <Badge
+              variant="outline"
+              className={
+                activeSource === "openalex"
+                  ? "border-blue-500/30 bg-blue-500/10 text-blue-400 gap-1.5"
+                  : "border-slate-500/30 bg-slate-500/10 text-slate-400 gap-1.5"
+              }
+            >
+              {activeSource === "openalex" ? (
+                <>
+                  <Zap className="h-3 w-3" /> Live OpenAlex API
+                  {keyword.trim() ? ` · "${keyword.trim()}"` : ""}
+                </>
+              ) : (
+                <>
+                  <LayoutList className="h-3 w-3" /> Dữ liệu corpus đã lưu
+                </>
+              )}
+            </Badge>
+          </div>
+        )}
       </motion.div>
 
-      {/* Search / Action bar */}
+      {/* ═══ Filter Bar ═══ */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.1 }}
         className="glass rounded-2xl border border-border/40 p-4"
       >
-        <div className="flex flex-col gap-3 md:flex-row md:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <Input
-              id="insights-keyword"
+        <div className="flex flex-col gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
               value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") analyzeKeyword() }}
-              className="pl-9 h-11 bg-muted/30 border-border/50 rounded-xl"
-              placeholder="Try: mamba, medical imaging, robotics, transformer..."
+              onChange={e => setKeyword(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && !isLoading && startYear <= endYear) fetchInsights()
+              }}
+              placeholder="Nhập chủ đề/từ khóa để phân tích trực tiếp từ OpenAlex (vd: machine learning) — để trống dùng dữ liệu corpus đã lưu"
+              className="w-full h-11 pl-10 pr-4 rounded-xl bg-muted/40 border border-border/50 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 flex-wrap">
+              <CalendarRange className="h-4 w-4 text-primary" />
+              <YearSelect id="insight-start" label="Từ" value={startYear} onChange={setStartYear} />
+              <span className="text-muted-foreground text-sm">—</span>
+              <YearSelect id="insight-end" label="Đến" value={endYear} onChange={setEndYear} />
+            </div>
             <Button
-              onClick={analyzeKeyword}
-              disabled={isLoading || !keyword.trim()}
-              className="h-11 px-5 rounded-xl gap-2"
+              onClick={fetchInsights}
+              disabled={isLoading || startYear > endYear}
+              className="h-11 px-6 rounded-xl gap-2"
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Analyze
-            </Button>
-            <Button
-              variant="outline"
-              onClick={createCorpus}
-              disabled={isCreatingCorpus || !keyword.trim()}
-              className="h-11 px-5 rounded-xl gap-2"
-            >
-              {isCreatingCorpus ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-              Build Corpus
+              Phân tích
             </Button>
           </div>
         </div>
       </motion.div>
 
-      {/* Status messages */}
+      {/* ═══ Error ═══ */}
       <AnimatePresence>
-        {(error || message) && (
+        {error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.97 }}
-            className={`rounded-xl px-4 py-3 text-sm border ${
-              error
-                ? "bg-destructive/10 border-destructive/20 text-destructive"
-                : "bg-primary/10 border-primary/20 text-primary"
-            }`}
+            className="rounded-xl px-4 py-3 text-sm border bg-destructive/10 border-destructive/20 text-destructive"
           >
-            {error || message}
+            {error}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Empty state */}
-      {!hasResults ? (
+      {/* ═══ Empty State ═══ */}
+      {!hasLoaded ? (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -346,9 +416,9 @@ export default function InsightsPage() {
           className="grid gap-4 md:grid-cols-3"
         >
           {[
-            { icon: BarChart3, title: "Trend Signal", description: "Check whether the keyword is growing by publication volume." },
-            { icon: Layers3, title: "Keyword Roles", description: "Separate domain, algorithm, application, and method keywords." },
-            { icon: Target, title: "Research Direction", description: "Turn keywords into concrete topic suggestions you can act on." },
+            { icon: BarChart3, title: "Top Chủ đề & Từ khóa", description: "Biểu đồ cột và đám mây từ khóa thể hiện các lĩnh vực nghiên cứu nổi bật nhất." },
+            { icon: TrendingUp, title: "Xu hướng Mới nổi", description: "Biểu đồ đường theo dõi dòng dịch chuyển keyword với Δ% tăng trưởng theo từng năm." },
+            { icon: Building2, title: "Tổ chức & Tác giả", description: "Bảng xếp hạng các trường đại học, viện nghiên cứu và tác giả dẫn đầu." },
           ].map(({ icon: Icon, title, description }) => (
             <div key={title} className="glass rounded-2xl border border-border/40 p-5">
               <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-3">
@@ -366,256 +436,382 @@ export default function InsightsPage() {
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
-          {/* Keyword Graph Card */}
-          <div className="glass rounded-2xl border border-border/40 overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-5 pb-4 gap-3">
-              <div>
-                <h2 className="font-semibold text-base flex items-center gap-2">
-                  <GitBranch className="h-4 w-4 text-primary" /> Keyword Co-occurrence Graph
-                </h2>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                  <span className="text-xs text-muted-foreground">Colored by category:</span>
-                  {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
-                    <span key={cat} className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: color }} />
-                      <span className="text-xs text-muted-foreground capitalize">{cat}</span>
-                    </span>
-                  ))}
+          {/* ═══ Stats Row ═══ */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                label: "Tổng bài báo",
+                value: totalPapers.toLocaleString(),
+                icon: FileText,
+                cls: "stat-purple",
+              },
+              {
+                label: "Chủ đề phân tích",
+                value: topics.length.toString(),
+                icon: LayoutList,
+                cls: "stat-emerald",
+              },
+              {
+                label: "Xu hướng mới nổi",
+                value: trends.filter(t => t.isEmerging).length.toString(),
+                icon: Flame,
+                cls: "stat-amber",
+              },
+              {
+                label: "Tổ chức dẫn đầu",
+                value: affiliations.length.toString(),
+                icon: Building2,
+                cls: "stat-rose",
+              },
+            ].map((stat, idx) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.06 }}
+                className={`insight-stat-card glass rounded-2xl border border-border/40 p-5 ${stat.cls}`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</span>
+                  <stat.icon className="h-4 w-4 text-muted-foreground" />
                 </div>
-              </div>
-              {graphData.nodes.length > 0 && (
-                <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/30">
-                  {(["2d", "3d"] as const).map((mode) => (
-                    <Button
-                      key={mode}
-                      variant={graphMode === mode ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-7 px-3 text-xs rounded-md"
-                      onClick={() => setGraphMode(mode)}
-                    >
-                      {mode.toUpperCase()}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="h-[420px] border-t border-border/30 bg-background/40 relative overflow-hidden flex items-center justify-center">
-              {graphData.nodes.length > 0 ? (
-                <div className="w-full h-full relative">
-                  {graphMode === "2d" ? (
-                    <ForceGraph2D
-                      graphData={graphData}
-                      nodeLabel={(node: any) => `${node.label || node.id} (${node.category || "unknown"})`}
-                      nodeColor={(node: any) => node.color}
-                      nodeVal={(node: any) => node.val}
-                      backgroundColor="#00000000"
-                    />
-                  ) : (
-                    <ForceGraph3D
-                      graphData={graphData}
-                      nodeLabel={(node: any) => `${node.label || node.id} (${node.category || "unknown"})`}
-                      nodeColor={(node: any) => node.color}
-                      nodeVal={(node: any) => node.val}
-                      backgroundColor="#00000000"
-                      linkDirectionalParticles={1}
-                    />
-                  )}
-                </div>
-              ) : (
-                <div className="text-center p-6 flex flex-col items-center gap-3">
-                  <GitBranch className="h-10 w-10 text-muted-foreground/20" />
-                  <p className="text-sm text-muted-foreground max-w-sm">
-                    {activeRunId
-                      ? "No keyword relationships could be generated for this corpus run yet."
-                      : `No completed corpus run exists for "${searchedKeyword}" yet. Build a corpus to generate the graph.`}
-                  </p>
-                  {!activeRunId && (
-                    <Button variant="outline" size="sm" onClick={createCorpus} disabled={isCreatingCorpus} className="rounded-xl gap-2">
-                      {isCreatingCorpus ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-                      Build Corpus for "{searchedKeyword}"
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Stats row */}
-          <div className="grid gap-4 lg:grid-cols-4">
-            {/* Trend signal */}
-            <div className="glass rounded-2xl border border-border/40 p-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Trend Signal</h3>
-              <div className={`text-3xl font-bold mb-1 ${trendConf?.cls ?? "text-muted-foreground"}`}>
-                {trendData ? `${growth.toFixed(1)}%` : "N/A"}
-              </div>
-              <div className="flex items-center gap-2">
-                {trendConf && (
-                  <Badge variant="outline" className={`border text-xs px-2 py-0.5 flex items-center gap-1 ${trendConf.badgeCls}`}>
-                    <trendConf.icon className="h-3 w-3" />
-                    {trendConf.label}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Avg. publication growth rate</p>
-            </div>
-
-            {/* Category chips */}
-            {(["algorithm", "domain", "application"] as const).map((category) => (
-              <div key={category} className="glass rounded-2xl border border-border/40 p-5">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  {CATEGORY_TITLES[category]}
-                </h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {(categories[category] || []).slice(0, 6).map((item) => (
-                    <span
-                      key={item._id || keywordName(item)}
-                      className={`text-xs px-2 py-0.5 rounded-full border ${CATEGORY_BADGE_COLORS[category]}`}
-                    >
-                      {keywordName(item)}
-                    </span>
-                  ))}
-                  {(categories[category] || []).length === 0 && (
-                    <span className="text-xs text-muted-foreground italic">No stored data yet.</span>
-                  )}
-                </div>
-              </div>
+                <div className="text-3xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground mt-1">{startYear} — {endYear}</p>
+              </motion.div>
             ))}
           </div>
 
-          {/* Opportunities + Evidence */}
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            {/* Opportunities */}
-            <div className="glass rounded-2xl border border-border/40 p-5 space-y-4">
+          {/* ═══ SECTION 1: Top Topics & Keywords ═══ */}
+          <div className="insight-divider" />
+
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-base flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" /> Suggested Research Opportunities
+                <h2 className="font-semibold text-lg flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Tiêu điểm Chủ đề & Từ khóa
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Topic directions testable by building a corpus and checking recent papers.
+                  Top lĩnh vực nghiên cứu theo số lượng bài báo trong giai đoạn {startYear}–{endYear}
                 </p>
               </div>
-
-              {opportunityCards.length > 0 ? (
-                <div className="space-y-3">
-                  {opportunityCards.map((item, index) => (
-                    <motion.div
-                      key={`${item.title}-${index}`}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.08 }}
-                      className="rounded-xl border border-border/40 bg-muted/20 p-4 space-y-2"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary">
-                          {item.type}
-                        </span>
-                        <h3 className="font-semibold text-sm">{item.title}</h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{item.why}</p>
-                      <div className="flex items-start gap-2 rounded-lg bg-muted/30 p-2.5">
-                        <ArrowRight className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
-                        <span className="text-xs text-muted-foreground">{item.next}</span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">
-                  Not enough local metadata yet. Click Build Corpus, wait for completion, then analyze again.
-                </p>
-              )}
+              <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/30">
+                <Button
+                  variant={topicsView === "chart" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-3 text-xs rounded-md gap-1.5"
+                  onClick={() => setTopicsView("chart")}
+                >
+                  <BarChart3 className="h-3 w-3" /> Bar Chart
+                </Button>
+                <Button
+                  variant={topicsView === "cloud" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-3 text-xs rounded-md gap-1.5"
+                  onClick={() => setTopicsView("cloud")}
+                >
+                  <Cloud className="h-3 w-3" /> Word Cloud
+                </Button>
+              </div>
             </div>
 
-            {/* Evidence papers */}
-            <div className="glass rounded-2xl border border-border/40 p-5 space-y-4">
-              <div>
-                <h2 className="font-semibold text-base flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" /> Evidence Papers
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Recent papers from OpenAlex for quick inspection.</p>
-              </div>
-
-              <div className="space-y-2">
-                {papers.slice(0, 5).map((paper) => (
-                  <a
-                    key={paper.id || paper.url || paper.title}
-                    href={paper.url || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block rounded-xl border border-border/40 bg-muted/20 p-3 hover:border-primary/30 hover:bg-primary/5 transition-all group"
-                  >
-                    <h3 className="line-clamp-2 text-xs font-semibold group-hover:text-primary transition-colors">
-                      {formatText(paper.title, "Untitled paper")}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {paper.publicationYear || "N/A"}
-                      {paper.citationCount > 0 && ` · ${paper.citationCount} citations`}
-                    </p>
-                  </a>
-                ))}
-                {papers.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic">
-                    No live papers loaded. Try another keyword or source later.
-                  </p>
+            <div className="grid gap-4 xl:grid-cols-1">
+              <div className="glass rounded-2xl border border-border/40 overflow-hidden">
+                {topicsView === "chart" ? (
+                  <div className="p-4">
+                    {topics.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={380}>
+                        <BarChart data={topics} layout="vertical" margin={{ left: 20, right: 30, top: 10, bottom: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.30 0.02 270 / 0.3)" />
+                          <XAxis type="number" tick={{ fill: "oklch(0.60 0.04 275)", fontSize: 11 }} />
+                          <YAxis
+                            type="category"
+                            dataKey="name"
+                            width={140}
+                            tick={{ fill: "oklch(0.80 0.02 275)", fontSize: 11 }}
+                            tickFormatter={(v: string) => v.length > 20 ? v.slice(0, 20) + "…" : v}
+                          />
+                          <Tooltip content={<InsightTooltip />} />
+                          <Bar dataKey="count" name="Số bài báo" radius={[0, 6, 6, 0]}>
+                            {topics.map((_entry, idx) => (
+                              <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-48 text-sm text-muted-foreground italic">
+                        Chưa có dữ liệu chủ đề. Nhập từ khóa để phân tích live từ OpenAlex, hoặc tạo corpus trước.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <WordCloud keywords={keywords} />
                 )}
               </div>
             </div>
+
+            {/* Top Keywords Table */}
+            {topics.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass rounded-2xl border border-border/40 p-4"
+              >
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Award className="h-4 w-4 text-primary" />
+                  Bảng xếp hạng chủ đề
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/30">
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">#</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Chủ đề</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Phân loại</th>
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Số bài</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topics.map((topic, idx) => (
+                        <tr key={topic.name} className="ranking-row border-b border-border/20">
+                          <td className="py-2.5 px-3">
+                            <RankMedal rank={idx + 1} />
+                          </td>
+                          <td className="py-2.5 px-3 font-medium capitalize">{topic.name}</td>
+                          <td className="py-2.5 px-3">
+                            <Badge variant="outline" className={`text-xs ${CATEGORY_BADGE[topic.category] || CATEGORY_BADGE.general}`}>
+                              {topic.category}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{topic.count.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </motion.div>
+            )}
           </div>
 
-          {/* Algorithm x Domain */}
-          <div className="glass rounded-2xl border border-border/40 p-5 space-y-4">
+          {/* ═══ SECTION 2: Emerging Trends ═══ */}
+          <div className="insight-divider" />
+
+          <div className="space-y-4">
             <div>
-              <h2 className="font-semibold text-base flex items-center gap-2">
-                <Layers3 className="h-4 w-4 text-primary" /> Algorithm × Domain Evidence
+              <h2 className="font-semibold text-lg flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Động lực Xu hướng Mới nổi
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Where algorithms are being applied — higher paper count = stronger evidence in your corpus.
+                Tốc độ tăng trưởng (Δ%) giữa các chu kỳ — keyword có Δ% vượt bậc được gắn nhãn <span className="text-amber-400 font-semibold">Emerging Trend 🔥</span>
               </p>
             </div>
 
-            {algorithmDomains.length > 0 ? (
-              <div className="space-y-2">
-                {algorithmDomains.slice(0, 8).map((pair) => (
-                  <div
-                    key={`${pair.algorithm}-${pair.domain}`}
-                    className="grid gap-3 rounded-xl border border-border/40 bg-muted/20 p-3 md:grid-cols-[1fr_1fr_auto_1.2fr] md:items-center"
-                  >
-                    <div>
-                      <p className="text-xs text-muted-foreground">Algorithm</p>
-                      <p className="text-sm font-medium">{pair.algorithm}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Domain</p>
-                      <p className="text-sm font-medium">{pair.domain}</p>
-                    </div>
-                    <Badge variant="secondary" className="text-xs w-fit">
-                      {pair.paperCount || 0} papers
-                    </Badge>
-                    <p className="text-xs text-muted-foreground">
-                      Use "{pair.algorithm} {pair.domain}" as a focused search phrase.
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border/50 p-5 text-sm text-muted-foreground text-center">
-                No algorithm-domain evidence yet. Click Build Corpus for the keyword, wait until complete, then Analyze again.
+            {/* Line Chart */}
+            <div className="glass rounded-2xl border border-border/40 p-4 overflow-hidden">
+              {lineChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={380}>
+                  <LineChart data={lineChartData} margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.30 0.02 270 / 0.3)" />
+                    <XAxis dataKey="year" tick={{ fill: "oklch(0.60 0.04 275)", fontSize: 11 }} />
+                    <YAxis tick={{ fill: "oklch(0.60 0.04 275)", fontSize: 11 }} />
+                    <Tooltip content={<InsightTooltip />} />
+                    <Legend
+                      wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                      iconType="circle"
+                      iconSize={8}
+                    />
+                    {trendNames.map((name, idx) => (
+                      <Line
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-48 text-sm text-muted-foreground italic">
+                  Chưa có dữ liệu xu hướng. Nhập từ khóa để phân tích live từ OpenAlex, hoặc tạo corpus và phân tích.
+                </div>
+              )}
+            </div>
+
+            {/* Trend Cards */}
+            {trends.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {trends.slice(0, 9).map((trend, idx) => {
+                  const isUp = trend.growthRate > 0
+                  const isDown = trend.growthRate < 0
+                  const TrendIcon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
+
+                  return (
+                    <motion.div
+                      key={trend.name}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="glass rounded-xl border border-border/40 p-4 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm capitalize truncate">{trend.name}</h3>
+                          <Badge variant="outline" className={`text-[10px] mt-1 ${CATEGORY_BADGE[trend.category] || CATEGORY_BADGE.general}`}>
+                            {trend.category}
+                          </Badge>
+                        </div>
+                        {trend.isEmerging && (
+                          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] gap-1 shrink-0">
+                            <Flame className="h-3 w-3" /> Emerging
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <TrendIcon className={`h-4 w-4 ${isUp ? "text-emerald-400" : isDown ? "text-red-400" : "text-yellow-400"}`} />
+                          <span className={`text-lg font-bold ${isUp ? "text-emerald-400" : isDown ? "text-red-400" : "text-yellow-400"}`}>
+                            {trend.growthRate > 0 ? "+" : ""}{trend.growthRate}%
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {trend.totalCount} bài tổng
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Tăng trưởng TB: {trend.avgGrowthRate > 0 ? "+" : ""}{trend.avgGrowthRate}%/năm
+                      </p>
+                    </motion.div>
+                  )
+                })}
               </div>
             )}
           </div>
 
-          {/* How to use */}
+          {/* ═══ SECTION 3: Top Affiliations & Authors ═══ */}
+          <div className="insight-divider" />
+
+          <div className="space-y-4">
+            <div>
+              <h2 className="font-semibold text-lg flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Mạng lưới & Đơn vị Dẫn đầu
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Tổ chức và tác giả có số lượng công bố cao nhất trong giai đoạn {startYear}–{endYear}
+              </p>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              {/* Affiliations Table */}
+              <div className="glass rounded-2xl border border-border/40 p-4">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  Top Tổ chức
+                </h3>
+                {affiliations.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/30">
+                          <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">#</th>
+                          <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Tổ chức</th>
+                          <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Bài báo</th>
+                          <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Tác giả</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {affiliations.map((aff, idx) => (
+                          <tr key={aff.affiliation} className="ranking-row border-b border-border/20">
+                            <td className="py-2.5 px-3">
+                              <RankMedal rank={idx + 1} />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-medium text-xs capitalize truncate max-w-[200px]" title={aff.affiliation}>
+                                {aff.affiliation}
+                                {aff.country && (
+                                  <span className="ml-1.5 text-[10px] uppercase text-muted-foreground not-italic">{aff.country}</span>
+                                )}
+                              </div>
+                              {aff.topAuthors.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {aff.topAuthors.slice(0, 3).map(a => (
+                                    <span key={a} className="text-[10px] text-muted-foreground bg-muted/40 rounded px-1.5 py-0.5">{a}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{aff.paperCount}</td>
+                            <td className="py-2.5 px-3 text-right text-muted-foreground tabular-nums">{aff.authorCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-32 text-sm text-muted-foreground italic">
+                    Chưa có dữ liệu tổ chức
+                  </div>
+                )}
+              </div>
+
+              {/* Authors Table */}
+              <div className="glass rounded-2xl border border-border/40 p-4">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  Top Tác giả
+                </h3>
+                {authors.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/30">
+                          <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">#</th>
+                          <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Tác giả</th>
+                          <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">Đơn vị</th>
+                          <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">Bài báo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {authors.map((author, idx) => (
+                          <tr key={author.name} className="ranking-row border-b border-border/20">
+                            <td className="py-2.5 px-3">
+                              <RankMedal rank={idx + 1} />
+                            </td>
+                            <td className="py-2.5 px-3 font-medium">{author.name}</td>
+                            <td className="py-2.5 px-3 text-xs text-muted-foreground capitalize truncate max-w-[160px]" title={author.affiliation || ""}>
+                              {author.affiliation || "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-semibold tabular-nums">{author.paperCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-32 text-sm text-muted-foreground italic">
+                    Chưa có dữ liệu tác giả
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ═══ How to use ═══ */}
           <div className="glass rounded-2xl border border-border/40 p-5">
             <h2 className="font-semibold text-sm flex items-center gap-2 mb-4">
-              <BrainCircuit className="h-4 w-4 text-primary" /> How To Use This For Research
+              <Sparkles className="h-4 w-4 text-primary" /> Cách sử dụng Insight
             </h2>
             <div className="grid gap-4 text-xs text-muted-foreground md:grid-cols-3">
               {[
-                "1. Use Trend Signal to decide whether the topic is worth exploring right now.",
-                "2. Use Algorithms/Domains/Applications to turn a broad keyword into a focused research angle.",
-                "3. Use Evidence Papers to verify that the suggested opportunity has real academic activity.",
-              ].map((tip) => (
+                "1. Nhập từ khóa + chọn khoảng thời gian rồi nhấn Phân tích để gọi live OpenAlex; để trống từ khóa sẽ thống kê từ corpus đã lưu.",
+                "2. Dùng Bar Chart & Word Cloud để xác định chủ đề/từ khóa nào đang dẫn đầu trong giai đoạn nghiên cứu.",
+                "3. Biểu đồ Emerging Trends giúp phát hiện từ khóa có tốc độ tăng Δ% vượt bậc — cơ hội nghiên cứu mới.",
+              ].map(tip => (
                 <div key={tip} className="flex items-start gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-primary/50 mt-1 shrink-0" />
                   <span>{tip}</span>

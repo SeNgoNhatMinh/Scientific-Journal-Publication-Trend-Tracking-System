@@ -379,9 +379,12 @@ const getTrendData = async (req, res, next) => {
     );
 
     // Analyze trend status
-    const latestTrends = trendData.trends.slice(-5); // Last 5 years
-    const avgGrowth =
-      latestTrends.reduce((sum, t) => sum + t.growthRate, 0) / latestTrends.length;
+    // Exclude the current incomplete year from the average to avoid false declining trends
+    const completeTrends = trendData.trends.slice(0, -1);
+    const latestTrends = completeTrends.slice(-4); // Last 4 complete years for avg
+    const avgGrowth = latestTrends.length > 0 
+      ? latestTrends.reduce((sum, t) => sum + t.growthRate, 0) / latestTrends.length
+      : 0;
 
     let trendStatus = 'stable';
     if (avgGrowth > 20) trendStatus = 'exploding';
@@ -899,6 +902,471 @@ const getRelatedKeywordsTrend = async (req, res, next) => {
   }
 };
 
+// ===================================================================
+// INSIGHT ENDPOINTS — Gọi OpenAlex API + Local DB
+// ===================================================================
+
+/**
+ * Insight 3.1: Top Topics & Keywords
+ * Khi có keyword: gọi OpenAlex → thống kê concepts/keywords từ kết quả live
+ * Khi không có keyword: aggregate từ local DB
+ */
+const getInsightTopTopics = async (req, res, next) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const startYear = parseInt(req.query.startYear, 10) || 2015;
+    const endYear = parseInt(req.query.endYear, 10) || currentYear;
+    const limit = parseLimit(req.query.limit, 10, 50);
+    const keyword = (req.query.keyword || '').trim();
+
+    // ── OpenAlex live search ──
+    if (keyword) {
+      const dataset = await academicApiService.getInsightDataset('openalex', keyword, {
+        startYear,
+        endYear,
+        maxPapers: 200,
+      });
+      const papers = dataset.papers;
+
+      // Chủ đề lớn (Fields of Study): đếm theo research topic của OpenAlex → Bar Chart
+      const topicFreq = {};
+      // Từ khóa chính (Keywords): đếm tần suất → Word Cloud
+      const keywordFreq = {};
+
+      for (const paper of papers) {
+        const seenTopics = new Set();
+        for (const topic of paper.topics || []) {
+          const name = (topic.topic || topic.field || '').trim();
+          if (!name) continue;
+          const key = name.toLowerCase();
+          if (seenTopics.has(key)) continue;
+          seenTopics.add(key);
+          if (!topicFreq[key]) topicFreq[key] = { name, count: 0, category: 'domain' };
+          topicFreq[key].count += 1;
+        }
+
+        const seenKeywords = new Set();
+
+        // Ưu tiên 1: keywords[] gán nhãn trực tiếp (nếu có)
+        for (const kw of paper.keywords || []) {
+          const normalized = String(kw).trim().toLowerCase();
+          if (!normalized || normalized === keyword.toLowerCase()) continue;
+          if (seenKeywords.has(normalized)) continue;
+          seenKeywords.add(normalized);
+          if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: kw, count: 0, category: 'general' };
+          keywordFreq[normalized].count += 1;
+        }
+
+        // Fallback: dùng tầng Topic cụ thể nhất trong topics[] khi keywords rỗng
+        // Topic là tầng chi tiết nhất (vd: "Creativity in Education and Neuroscience")
+        // thay vì Field/Domain quá rộng
+        for (const topic of paper.topics || []) {
+          const topicName = (topic.topic || '').trim();
+          if (!topicName) continue;
+          const normalized = topicName.toLowerCase();
+          if (normalized === keyword.toLowerCase()) continue;
+          if (seenKeywords.has(normalized)) continue;
+          seenKeywords.add(normalized);
+          if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: topicName, count: 0, category: 'domain' };
+          keywordFreq[normalized].count += 1;
+        }
+      }
+
+      const topics = Object.values(topicFreq)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
+      const wordCloudKeywords = Object.values(keywordFreq)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit * 3);
+
+      return res.status(200).json({
+        success: true,
+        source: 'openalex',
+        keyword,
+        startYear,
+        endYear,
+        totalPapers: papers.length,
+        topics: topics.map(t => ({ name: t.name, normalizedText: t.name.toLowerCase(), category: t.category, count: t.count })),
+        keywords: wordCloudKeywords.map(t => ({ name: t.name, normalizedText: t.name.toLowerCase(), category: t.category, count: t.count })),
+      });
+    }
+
+    // ── Local DB fallback ──
+    const topicsPipeline = [
+      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $unwind: '$keywordIds' },
+      { $group: { _id: '$keywordIds', count: { $sum: 1 } } },
+      { $lookup: { from: 'keywords', localField: '_id', foreignField: '_id', as: 'kw' } },
+      { $unwind: '$kw' },
+      { $match: { 'kw.category': 'domain' } },
+      { $sort: { count: -1 } },
+      { $limit: limit },
+      { $project: { _id: 0, name: '$kw.name', normalizedText: '$kw.normalizedText', category: '$kw.category', count: 1 } },
+    ];
+
+    const keywordsPipeline = [
+      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $unwind: '$keywordIds' },
+      { $group: { _id: '$keywordIds', count: { $sum: 1 } } },
+      { $lookup: { from: 'keywords', localField: '_id', foreignField: '_id', as: 'kw' } },
+      { $unwind: '$kw' },
+      { $sort: { count: -1 } },
+      { $limit: limit * 3 },
+      { $project: { _id: 0, name: '$kw.name', normalizedText: '$kw.normalizedText', category: '$kw.category', count: 1 } },
+    ];
+
+    const totalPipeline = [
+      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $count: 'total' },
+    ];
+
+    const [topics, keywords, totalResult] = await Promise.all([
+      Paper.aggregate(topicsPipeline),
+      Paper.aggregate(keywordsPipeline),
+      Paper.aggregate(totalPipeline),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      source: 'local',
+      startYear,
+      endYear,
+      totalPapers: totalResult[0]?.total || 0,
+      topics,
+      keywords,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Insight 3.2: Emerging & Trending Topics
+ * Khi có keyword: gọi OpenAlex → lấy related keywords trend (count theo năm)
+ * Khi không có keyword: aggregate từ local DB
+ */
+const getInsightEmergingTrends = async (req, res, next) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const startYear = parseInt(req.query.startYear, 10) || 2015;
+    const endYear = parseInt(req.query.endYear, 10) || currentYear;
+    const limit = parseLimit(req.query.limit, 10, 30);
+    const keyword = (req.query.keyword || '').trim();
+
+    // ── OpenAlex live: dùng getInsightDataset ──
+    if (keyword) {
+      let dataset = null;
+      try {
+        dataset = await academicApiService.getInsightDataset('openalex', keyword, {
+          startYear,
+          endYear,
+          maxPapers: 200,
+        });
+      } catch (err) {
+        console.warn('[insight] OpenAlex insight dataset failed:', err.message);
+      }
+
+      if (dataset && dataset.papers && dataset.papers.length > 0) {
+        const papers = dataset.papers;
+
+        // 1. Đếm tần suất + phân bố theo năm của từng keyword
+        const keywordFreq = {};
+        const keywordYearlyMap = {};
+
+        papers.forEach(paper => {
+          const year = paper.publicationYear;
+          const seen = new Set();
+
+          // Ưu tiên 1: keywords[] gán nhãn trực tiếp
+          (paper.keywords || []).forEach(kw => {
+            const normalized = String(kw).trim().toLowerCase();
+            if (!normalized || normalized === keyword.toLowerCase()) return;
+            seen.add(normalized);
+            if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: kw, count: 0 };
+            keywordFreq[normalized].count += 1;
+          });
+
+          // Fallback: Topic level cụ thể nhất trong topics[] (phổ biến hơn keywords[])
+          (paper.topics || []).forEach(t => {
+            const topicName = (t.topic || '').trim();
+            if (!topicName) return;
+            const normalized = topicName.toLowerCase();
+            if (normalized === keyword.toLowerCase() || seen.has(normalized)) return;
+            seen.add(normalized);
+            if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: topicName, count: 0 };
+            keywordFreq[normalized].count += 1;
+          });
+
+          seen.forEach(normalized => {
+            if (!keywordYearlyMap[normalized]) keywordYearlyMap[normalized] = {};
+            if (year && year >= startYear && year <= endYear) {
+              keywordYearlyMap[normalized][year] = (keywordYearlyMap[normalized][year] || 0) + 1;
+            }
+          });
+        });
+
+        // 2. Get top keywords
+        const topKeywords = Object.entries(keywordFreq)
+          .sort(([, a], [, b]) => b.count - a.count)
+          .slice(0, limit * 2);
+
+        // 3. Build trends with yearly data + Δ%
+        const trends = topKeywords.map(([normalized, info]) => {
+          const yearlyMap = keywordYearlyMap[normalized] || {};
+          const filled = [];
+          for (let y = startYear; y <= endYear; y++) {
+            filled.push({ year: y, count: yearlyMap[y] || 0 });
+          }
+
+          let growthRate = 0;
+          if (filled.length >= 2) {
+            const prev = filled[filled.length - 2].count;
+            const curr = filled[filled.length - 1].count;
+            if (prev > 0) growthRate = ((curr - prev) / prev) * 100;
+            else if (curr > 0) growthRate = 100;
+          }
+
+          let avgGrowth = 0;
+          let growthPairs = 0;
+          for (let i = 1; i < filled.length; i++) {
+            if (filled[i - 1].count > 0) {
+              avgGrowth += ((filled[i].count - filled[i - 1].count) / filled[i - 1].count) * 100;
+              growthPairs++;
+            }
+          }
+          if (growthPairs > 0) avgGrowth /= growthPairs;
+
+          const isEmerging = growthRate > 50 || avgGrowth > 30;
+
+          return {
+            name: info.name,
+            normalizedText: normalized,
+            category: 'general',
+            totalCount: info.count,
+            yearlyData: filled,
+            growthRate: Number(growthRate.toFixed(1)),
+            avgGrowthRate: Number(avgGrowth.toFixed(1)),
+            isEmerging,
+          };
+        });
+
+        trends.sort((a, b) => {
+          if (a.isEmerging !== b.isEmerging) return a.isEmerging ? -1 : 1;
+          return b.growthRate - a.growthRate;
+        });
+
+        return res.status(200).json({
+          success: true,
+          source: 'openalex',
+          keyword,
+          startYear,
+          endYear,
+          trends: trends.slice(0, limit),
+        });
+      }
+    }
+
+    // ── Local DB fallback ──
+    const pipeline = [
+      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $unwind: '$keywordIds' },
+      { $group: { _id: { keywordId: '$keywordIds', year: '$publicationYear' }, count: { $sum: 1 } } },
+      { $group: { _id: '$_id.keywordId', yearlyData: { $push: { year: '$_id.year', count: '$count' } }, totalCount: { $sum: '$count' } } },
+      { $sort: { totalCount: -1 } },
+      { $limit: limit * 2 },
+      { $lookup: { from: 'keywords', localField: '_id', foreignField: '_id', as: 'kw' } },
+      { $unwind: '$kw' },
+      { $project: { _id: 0, keywordId: '$_id', name: '$kw.name', normalizedText: '$kw.normalizedText', category: '$kw.category', totalCount: 1, yearlyData: 1 } },
+    ];
+
+    const rawTrends = await Paper.aggregate(pipeline);
+
+    const trends = rawTrends.map(item => {
+      const sorted = [...item.yearlyData].sort((a, b) => a.year - b.year);
+      const filled = [];
+      for (let y = startYear; y <= endYear; y++) {
+        const found = sorted.find(d => d.year === y);
+        filled.push({ year: y, count: found ? found.count : 0 });
+      }
+
+      let growthRate = 0;
+      if (filled.length >= 2) {
+        const prev = filled[filled.length - 2].count;
+        const curr = filled[filled.length - 1].count;
+        if (prev > 0) growthRate = ((curr - prev) / prev) * 100;
+        else if (curr > 0) growthRate = 100;
+      }
+
+      let avgGrowth = 0;
+      let growthPairs = 0;
+      for (let i = 1; i < filled.length; i++) {
+        if (filled[i - 1].count > 0) {
+          avgGrowth += ((filled[i].count - filled[i - 1].count) / filled[i - 1].count) * 100;
+          growthPairs++;
+        }
+      }
+      if (growthPairs > 0) avgGrowth /= growthPairs;
+
+      return {
+        ...item,
+        yearlyData: filled,
+        growthRate: Number(growthRate.toFixed(1)),
+        avgGrowthRate: Number(avgGrowth.toFixed(1)),
+        isEmerging: growthRate > 50 || avgGrowth > 30,
+      };
+    });
+
+    trends.sort((a, b) => {
+      if (a.isEmerging !== b.isEmerging) return a.isEmerging ? -1 : 1;
+      return b.growthRate - a.growthRate;
+    });
+
+    res.status(200).json({
+      success: true,
+      source: 'local',
+      startYear,
+      endYear,
+      trends: trends.slice(0, limit),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Insight 3.3: Top Influencers & Affiliations
+ * Khi có keyword: gọi OpenAlex → thống kê institutions/authors từ papers live
+ * Khi không có keyword: aggregate từ local DB
+ */
+const getInsightTopAffiliations = async (req, res, next) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const startYear = parseInt(req.query.startYear, 10) || 2015;
+    const endYear = parseInt(req.query.endYear, 10) || currentYear;
+    const limit = parseLimit(req.query.limit, 10, 50);
+    const keyword = (req.query.keyword || '').trim();
+
+    // ── OpenAlex live search ──
+    if (keyword) {
+      const dataset = await academicApiService.getInsightDataset('openalex', keyword, {
+        startYear,
+        endYear,
+        maxPapers: 200,
+      });
+      const papers = dataset.papers;
+
+      // Thống kê tổ chức (Affiliation) và tác giả dẫn đầu từ authorships của OpenAlex
+      const affMap = {};
+      const authorMap = {};
+
+      for (const paper of papers) {
+        const paperId = paper.id || paper.title;
+
+        for (const author of paper.authors || []) {
+          const authorName = (author.name || '').trim();
+          if (!authorName) continue;
+
+          const authorKey = authorName.toLowerCase();
+          if (!authorMap[authorKey]) {
+            authorMap[authorKey] = { name: authorName, papers: new Set(), affiliation: null };
+          }
+          authorMap[authorKey].papers.add(paperId);
+
+          for (const institution of author.institutions || []) {
+            const affName = (institution.name || '').trim();
+            if (!affName) continue;
+
+            const affKey = affName.toLowerCase();
+            if (!affMap[affKey]) {
+              affMap[affKey] = {
+                affiliation: affName,
+                country: institution.country || null,
+                papers: new Set(),
+                authors: new Set(),
+              };
+            }
+            affMap[affKey].papers.add(paperId);
+            affMap[affKey].authors.add(authorName);
+
+            if (!authorMap[authorKey].affiliation) {
+              authorMap[authorKey].affiliation = affName;
+            }
+          }
+        }
+      }
+
+      const affiliations = Object.values(affMap)
+        .map(a => ({
+          affiliation: a.affiliation,
+          country: a.country,
+          paperCount: a.papers.size,
+          authorCount: a.authors.size,
+          topAuthors: Array.from(a.authors).slice(0, 5),
+        }))
+        .sort((a, b) => b.paperCount - a.paperCount)
+        .slice(0, limit);
+
+      const authors = Object.values(authorMap)
+        .map(a => ({
+          name: a.name,
+          paperCount: a.papers.size,
+          affiliation: a.affiliation || '',
+        }))
+        .filter(a => a.paperCount >= 1)
+        .sort((a, b) => b.paperCount - a.paperCount)
+        .slice(0, limit);
+
+      return res.status(200).json({
+        success: true,
+        source: 'openalex',
+        keyword,
+        startYear,
+        endYear,
+        affiliations,
+        authors,
+      });
+    }
+
+    // ── Local DB fallback ──
+    const affiliationPipeline = [
+      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $unwind: '$authors' },
+      { $unwind: { path: '$authors.affiliations', preserveNullAndEmptyArrays: false } },
+      { $group: { _id: { $toLower: { $trim: { input: '$authors.affiliations' } } }, paperCount: { $addToSet: '$_id' }, authorNames: { $addToSet: '$authors.name' } } },
+      { $project: { _id: 0, affiliation: '$_id', paperCount: { $size: '$paperCount' }, authorCount: { $size: '$authorNames' }, topAuthors: { $slice: ['$authorNames', 5] } } },
+      { $match: { affiliation: { $ne: '' } } },
+      { $sort: { paperCount: -1 } },
+      { $limit: limit },
+    ];
+
+    const authorPipeline = [
+      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $unwind: '$authors' },
+      { $group: { _id: { $toLower: { $trim: { input: '$authors.name' } } }, displayName: { $first: '$authors.name' }, paperCount: { $addToSet: '$_id' }, affiliations: { $addToSet: { $arrayElemAt: ['$authors.affiliations', 0] } } } },
+      { $project: { _id: 0, name: '$displayName', paperCount: { $size: '$paperCount' }, affiliation: { $arrayElemAt: ['$affiliations', 0] } } },
+      { $match: { name: { $ne: '' }, paperCount: { $gte: 2 } } },
+      { $sort: { paperCount: -1 } },
+      { $limit: limit },
+    ];
+
+    const [affiliations, authors] = await Promise.all([
+      Paper.aggregate(affiliationPipeline),
+      Paper.aggregate(authorPipeline),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      source: 'local',
+      startYear,
+      endYear,
+      affiliations,
+      authors,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getTrendData,
   compareTrends,
@@ -910,5 +1378,7 @@ module.exports = {
   getKeywordGraph,
   getAlgorithmDomains,
   getRelatedKeywordsTrend,
+  getInsightTopTopics,
+  getInsightEmergingTrends,
+  getInsightTopAffiliations,
 };
-

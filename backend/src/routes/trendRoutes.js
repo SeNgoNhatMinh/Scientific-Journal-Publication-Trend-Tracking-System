@@ -280,5 +280,95 @@ router.get('/topics/:topicId', trendController.getTopicDetails);
  */
 router.get('/related-keywords', trendController.getRelatedKeywordsTrend);
 
+/**
+ * @swagger
+ * /trends/insights/top-topics:
+ *   get:
+ *     tags:
+ *       - Insights
+ *     security: []
+ *     summary: Top chủ đề và từ khóa trong khoảng thời gian
+ *     description: Returns top fields of study (domain keywords) and all keywords ranked by paper count. Powers the Bar Chart and Word Cloud on the Insights page.
+ *     parameters:
+ *       - in: query
+ *         name: startYear
+ *         schema:
+ *           type: integer
+ *           default: 2015
+ *       - in: query
+ *         name: endYear
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Top topics and keywords retrieved
+ */
+router.get('/insights/top-topics', trendController.getInsightTopTopics);
+
+/**
+ * @swagger
+ * /trends/insights/emerging-trends:
+ *   get:
+ *     tags:
+ *       - Insights
+ *     security: []
+ *     summary: Xu hướng mới nổi với Δ% tăng trưởng
+ *     description: Returns keywords with yearly publication counts and growth rates. Keywords with high growth (Δ% > 50%) are labeled as Emerging Trends. Powers the Line Chart on the Insights page.
+ *     parameters:
+ *       - in: query
+ *         name: startYear
+ *         schema:
+ *           type: integer
+ *           default: 2015
+ *       - in: query
+ *         name: endYear
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Emerging trends retrieved
+ */
+router.get('/insights/emerging-trends', trendController.getInsightEmergingTrends);
+
+/**
+ * @swagger
+ * /trends/insights/top-affiliations:
+ *   get:
+ *     tags:
+ *       - Insights
+ *     security: []
+ *     summary: Tổ chức và tác giả dẫn đầu
+ *     description: Returns top affiliations (universities, research institutes) and authors ranked by number of publications. Powers the ranking table on the Insights page.
+ *     parameters:
+ *       - in: query
+ *         name: startYear
+ *         schema:
+ *           type: integer
+ *           default: 2015
+ *       - in: query
+ *         name: endYear
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Top affiliations and authors retrieved
+ */
+router.get('/insights/top-affiliations', trendController.getInsightTopAffiliations);
+
 module.exports = router;
 

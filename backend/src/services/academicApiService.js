@@ -924,13 +924,13 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
     });
 
     const counts = new Map();
-    for (let year = startYear; year <= currentYear; year += 1) {
+    for (let year = startYear - 1; year <= currentYear; year += 1) {
       counts.set(year, 0);
     }
 
     (response.data.group_by || []).forEach(item => {
       const year = parseInt(item.key, 10);
-      if (year >= startYear && year <= currentYear) {
+      if (year >= startYear - 1 && year <= currentYear) {
         counts.set(year, item.count || 0);
       }
     });
@@ -940,7 +940,7 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
         year,
         count,
       }))
-    );
+    ).slice(1);
 
     return { source: normalizedSource, keyword, trends };
   }
@@ -959,12 +959,12 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
     );
 
     const counts = new Map();
-    for (let year = startYear; year <= currentYear; year += 1) {
+    for (let year = startYear - 1; year <= currentYear; year += 1) {
       counts.set(year, 0);
     }
 
     (response.data.data || []).forEach(paper => {
-      if (paper.year && paper.year >= startYear && paper.year <= currentYear) {
+      if (paper.year && paper.year >= startYear - 1 && paper.year <= currentYear) {
         counts.set(paper.year, (counts.get(paper.year) || 0) + 1);
       }
     });
@@ -974,7 +974,7 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
         year,
         count,
       }))
-    );
+    ).slice(1);
 
     return { source: normalizedSource, keyword, trends };
   }
@@ -995,14 +995,14 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
   });
 
   const counts = new Map();
-  for (let year = startYear; year <= currentYear; year += 1) {
+  for (let year = startYear - 1; year <= currentYear; year += 1) {
     counts.set(year, 0);
   }
 
   const values = response.data.message?.facets?.published?.values || [];
   values.forEach(item => {
     const year = parseInt(item.value, 10);
-    if (!Number.isNaN(year) && year >= startYear && year <= currentYear) {
+    if (!Number.isNaN(year) && year >= startYear - 1 && year <= currentYear) {
       counts.set(year, item.count || 0);
     }
   });
@@ -1012,7 +1012,7 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
       year,
       count,
     }))
-  );
+  ).slice(1);
 
   return { source: normalizedSource, keyword, trends };
 };
@@ -1139,6 +1139,135 @@ const getRelatedKeywordsTrend = async (source, keyword, startYear = 2010) => {
   }
 };
 
+/**
+ * Map một OpenAlex work về cấu trúc metadata phục vụ phân tích Insight.
+ * Trích xuất đúng 5 đặc trưng cốt lõi theo thiết kế:
+ *  - Chủ đề lớn (Fields of Study)  → topics[].field / primary_topic
+ *  - Từ khóa chính (Keywords)      → keywords[]
+ *  - Đơn vị công tác (Affiliation) → authorships[].institutions[]
+ *  - Thời gian (Publication Date)  → publication_year
+ *  - Trích dẫn (phục vụ xếp hạng)  → cited_by_count
+ */
+const mapOpenAlexInsightWork = work => {
+  const topics = (work.topics || [])
+    .map(topic => ({
+      topic: topic.display_name || null,
+      subfield: topic.subfield?.display_name || null,
+      field: topic.field?.display_name || null,
+      domain: topic.domain?.display_name || null,
+      score: topic.score || 0,
+    }))
+    .filter(topic => topic.topic || topic.field);
+
+  const keywords = (work.keywords || [])
+    .map(keyword =>
+      typeof keyword === 'string'
+        ? keyword
+        : keyword.display_name || keyword.keyword || null
+    )
+    .filter(Boolean);
+
+  const authorships = work.authorships || [];
+
+  const authors = authorships
+    .map(authorship => ({
+      name: authorship.author?.display_name || null,
+      institutions: (authorship.institutions || [])
+        .map(institution => ({
+          name: institution.display_name || null,
+          country: institution.country_code || null,
+        }))
+        .filter(institution => institution.name),
+    }))
+    .filter(author => author.name);
+
+  const institutions = [];
+  for (const authorship of authorships) {
+    for (const institution of authorship.institutions || []) {
+      if (institution.display_name) {
+        institutions.push({
+          name: institution.display_name,
+          country: institution.country_code || null,
+        });
+      }
+    }
+  }
+
+  return {
+    id: work.id,
+    title: work.title || null,
+    publicationYear: work.publication_year || null,
+    citationCount: work.cited_by_count || 0,
+    primaryTopic: work.primary_topic?.display_name || topics[0]?.topic || null,
+    primaryField: work.primary_topic?.field?.display_name || topics[0]?.field || null,
+    topics,
+    keywords,
+    authors,
+    institutions,
+  };
+};
+
+/**
+ * Lấy tập dữ liệu metadata (Enriched dataset) từ OpenAlex phục vụ 3 nhóm Insight.
+ * Một lần gọi /works lấy đủ topics + keywords + institutions, có cache để tái sử dụng
+ * giữa 3 endpoint insight (top-topics, emerging-trends, top-affiliations).
+ */
+const getInsightDataset = async (source, keyword, options = {}) => {
+  const normalizedSource = normalizeSource(source);
+  if (normalizedSource !== 'openalex') {
+    const error = new Error(
+      `Insight dataset is currently only supported for OpenAlex (requested: ${normalizedSource})`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const currentYear = new Date().getFullYear();
+  const startYear = options.startYear || 2015;
+  const endYear = options.endYear || currentYear;
+  const maxPapers = Math.min(Math.max(options.maxPapers || 200, 25), 200);
+  const cleanKeyword = String(keyword || '').trim();
+
+  const cacheKey = `openalex:insight:${cleanKeyword}:${startYear}:${endYear}:${maxPapers}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached) return cached;
+
+  const params = withOpenAlexParams({
+    filter: `publication_year:${startYear}-${endYear},type:article|proceedings-article|posted-content`,
+    per_page: maxPapers,
+    select:
+      'id,title,publication_year,cited_by_count,authorships,topics,primary_topic,keywords',
+    // Dùng relevance sort (default của OpenAlex khi có search keyword) thay vì
+    // cited_by_count:desc để tránh bias về bài cũ/nổi tiếng, lấy đại diện đúng hơn.
+    // Chỉ sort by citation khi không có keyword (browse tổng quát).
+  });
+  if (cleanKeyword) {
+    params.search = cleanKeyword;
+    // Không set sort → OpenAlex mặc định relevance score (đại diện tốt nhất)
+  } else {
+    params.sort = 'cited_by_count:desc';
+  }
+
+  let response;
+  try {
+    response = await openAlexClient.get('/works', { params });
+  } catch (error) {
+    toProviderError('OpenAlex', error);
+  }
+
+  const papers = (response.data.results || []).map(mapOpenAlexInsightWork);
+  const result = {
+    source: normalizedSource,
+    keyword: cleanKeyword || null,
+    startYear,
+    endYear,
+    total: response.data.meta?.count || papers.length,
+    papers,
+  };
+  searchCache.set(cacheKey, result);
+  return result;
+};
+
 module.exports = {
   searchPapers,
   getTrendData,
@@ -1146,5 +1275,6 @@ module.exports = {
   getAuthorInfo,
   normalizeSource,
   getRelatedKeywordsTrend,
+  getInsightDataset,
 };
 

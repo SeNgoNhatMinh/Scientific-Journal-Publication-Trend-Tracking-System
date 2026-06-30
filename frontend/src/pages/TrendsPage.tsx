@@ -15,6 +15,8 @@ import {
   LineChart,
   Line,
   Legend,
+  ComposedChart,
+  Bar,
 } from "recharts"
 import api from "@/lib/api"
 import { formatText } from "@/lib/format"
@@ -49,7 +51,7 @@ function CustomTooltip({ active, payload, label }: any) {
       <p className="font-semibold mb-1 text-foreground">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }}>
-          {p.name === "count" ? `${p.value?.toLocaleString()} papers` : `${p.value}% growth`}
+          {p.dataKey === "count" ? `${p.value?.toLocaleString()} papers` : `${p.value}% growth`}
         </p>
       ))}
     </div>
@@ -577,28 +579,23 @@ export default function TrendsPage() {
                 {/* Chart */}
                 <div className="h-[280px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData.trends} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="oklch(0.65 0.27 285)" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="oklch(0.65 0.27 285)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
+                    <ComposedChart 
+                      data={trendData.trends.map((t: any) => t.year === new Date().getFullYear() ? { ...t, growthRate: null } : t)} 
+                      margin={{ top: 5, right: 5, left: -10, bottom: 0 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.4 0.02 270 / 0.2)" vertical={false} />
-                      <XAxis dataKey="year" tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="year" tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} tickFormatter={(val) => val === new Date().getFullYear() ? `${val}*` : val} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "oklch(0.55 0.03 270)" }} axisLine={false} tickLine={false} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "oklch(0.65 0.27 285)" }} axisLine={false} tickLine={false} tickFormatter={(val) => `${val}%`} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Area
-                        type="monotone"
-                        dataKey="count"
-                        stroke="oklch(0.65 0.27 285)"
-                        strokeWidth={2.5}
-                        fill="url(#trendGradient)"
-                        dot={{ r: 3, fill: "oklch(0.65 0.27 285)", strokeWidth: 0 }}
-                        activeDot={{ r: 5, fill: "oklch(0.65 0.27 285)", stroke: "oklch(0.75 0.27 285)", strokeWidth: 2 }}
-                      />
-                    </AreaChart>
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                      <Bar yAxisId="left" dataKey="count" fill="oklch(0.65 0.27 285 / 0.4)" radius={[4, 4, 0, 0]} name="Publication Volume (count)" />
+                      <Line yAxisId="right" type="monotone" dataKey="growthRate" stroke="oklch(0.65 0.27 285)" strokeWidth={2.5} name="Growth Rate (%)" dot={{ r: 3, fill: "oklch(0.65 0.27 285)", strokeWidth: 0 }} activeDot={{ r: 5, fill: "oklch(0.65 0.27 285)", stroke: "oklch(0.75 0.27 285)", strokeWidth: 2 }} />
+                    </ComposedChart>
                   </ResponsiveContainer>
+                  <p className="text-[10px] text-muted-foreground mt-2 text-center opacity-70">
+                    * {new Date().getFullYear()} data is incomplete (year-to-date)
+                  </p>
                 </div>
               </div>
             ) : !error && (
