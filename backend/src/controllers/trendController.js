@@ -295,6 +295,38 @@ const validateAnalysisRunId = (analysisRunId, res) => {
   return false;
 };
 
+const OPENALEX_UNAVAILABLE_WARNING =
+  'OpenAlex tạm thời không khả dụng (rate limit). Đang dùng dữ liệu corpus đã lưu. Thêm OPENALEX_API_KEY vào backend để phân tích live ổn định hơn.';
+
+const buildInsightLocalMatch = (startYear, endYear, keyword) => {
+  const match = { publicationYear: { $gte: startYear, $lte: endYear } };
+  const trimmed = String(keyword || '').trim();
+  if (trimmed) {
+    match.$text = { $search: trimmed };
+  }
+  return match;
+};
+
+const fetchInsightDatasetSafe = async (keyword, startYear, endYear) => {
+  try {
+    const dataset = await academicApiService.getInsightDataset('openalex', keyword, {
+      startYear,
+      endYear,
+      maxPapers: 200,
+    });
+    if (dataset?.papers?.length) {
+      return { dataset, openAlexError: null };
+    }
+    return {
+      dataset: null,
+      openAlexError: new Error('OpenAlex returned no papers for this query and date range'),
+    };
+  } catch (error) {
+    console.warn('[insight] OpenAlex insight dataset failed:', error.message);
+    return { dataset: null, openAlexError: error };
+  }
+};
+
 const loadPaperKeywordSets = async (paperFilter, paperLimit) => {
   const papers = await Paper.find({
     ...paperFilter,
@@ -938,79 +970,81 @@ const getInsightTopTopics = async (req, res, next) => {
 
     // ── OpenAlex live search ──
     if (keyword) {
-      const dataset = await academicApiService.getInsightDataset('openalex', keyword, {
-        startYear,
-        endYear,
-        maxPapers: 200,
-      });
-      const papers = dataset.papers;
+      const { dataset, openAlexError } = await fetchInsightDatasetSafe(keyword, startYear, endYear);
 
-      // Chủ đề lớn (Fields of Study): đếm theo research topic của OpenAlex → Bar Chart
-      const topicFreq = {};
-      // Từ khóa chính (Keywords): đếm tần suất → Word Cloud
-      const keywordFreq = {};
+      if (dataset?.papers?.length) {
+        const papers = dataset.papers;
 
-      for (const paper of papers) {
-        const seenTopics = new Set();
-        for (const topic of paper.topics || []) {
-          const name = (topic.topic || topic.field || '').trim();
-          if (!name) continue;
-          const key = name.toLowerCase();
-          if (seenTopics.has(key)) continue;
-          seenTopics.add(key);
-          if (!topicFreq[key]) topicFreq[key] = { name, count: 0, category: 'domain' };
-          topicFreq[key].count += 1;
+        // Chủ đề lớn (Fields of Study): đếm theo research topic của OpenAlex → Bar Chart
+        const topicFreq = {};
+        // Từ khóa chính (Keywords): đếm tần suất → Word Cloud
+        const keywordFreq = {};
+
+        for (const paper of papers) {
+          const seenTopics = new Set();
+          for (const topic of paper.topics || []) {
+            const name = (topic.topic || topic.field || '').trim();
+            if (!name) continue;
+            const key = name.toLowerCase();
+            if (seenTopics.has(key)) continue;
+            seenTopics.add(key);
+            if (!topicFreq[key]) topicFreq[key] = { name, count: 0, category: 'domain' };
+            topicFreq[key].count += 1;
+          }
+
+          const seenKeywords = new Set();
+
+          // Ưu tiên 1: keywords[] gán nhãn trực tiếp (nếu có)
+          for (const kw of paper.keywords || []) {
+            const normalized = String(kw).trim().toLowerCase();
+            if (!normalized || normalized === keyword.toLowerCase()) continue;
+            if (seenKeywords.has(normalized)) continue;
+            seenKeywords.add(normalized);
+            if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: kw, count: 0, category: 'general' };
+            keywordFreq[normalized].count += 1;
+          }
+
+          // Fallback: dùng tầng Topic cụ thể nhất trong topics[] khi keywords rỗng
+          for (const topic of paper.topics || []) {
+            const topicName = (topic.topic || '').trim();
+            if (!topicName) continue;
+            const normalized = topicName.toLowerCase();
+            if (normalized === keyword.toLowerCase()) continue;
+            if (seenKeywords.has(normalized)) continue;
+            seenKeywords.add(normalized);
+            if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: topicName, count: 0, category: 'domain' };
+            keywordFreq[normalized].count += 1;
+          }
         }
 
-        const seenKeywords = new Set();
+        const topics = Object.values(topicFreq)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, limit);
+        const wordCloudKeywords = Object.values(keywordFreq)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, limit * 3);
 
-        // Ưu tiên 1: keywords[] gán nhãn trực tiếp (nếu có)
-        for (const kw of paper.keywords || []) {
-          const normalized = String(kw).trim().toLowerCase();
-          if (!normalized || normalized === keyword.toLowerCase()) continue;
-          if (seenKeywords.has(normalized)) continue;
-          seenKeywords.add(normalized);
-          if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: kw, count: 0, category: 'general' };
-          keywordFreq[normalized].count += 1;
-        }
-
-        // Fallback: dùng tầng Topic cụ thể nhất trong topics[] khi keywords rỗng
-        // Topic là tầng chi tiết nhất (vd: "Creativity in Education and Neuroscience")
-        // thay vì Field/Domain quá rộng
-        for (const topic of paper.topics || []) {
-          const topicName = (topic.topic || '').trim();
-          if (!topicName) continue;
-          const normalized = topicName.toLowerCase();
-          if (normalized === keyword.toLowerCase()) continue;
-          if (seenKeywords.has(normalized)) continue;
-          seenKeywords.add(normalized);
-          if (!keywordFreq[normalized]) keywordFreq[normalized] = { name: topicName, count: 0, category: 'domain' };
-          keywordFreq[normalized].count += 1;
-        }
+        return res.status(200).json({
+          success: true,
+          source: 'openalex',
+          keyword,
+          startYear,
+          endYear,
+          totalPapers: papers.length,
+          topics: topics.map(t => ({ name: t.name, normalizedText: t.name.toLowerCase(), category: t.category, count: t.count })),
+          keywords: wordCloudKeywords.map(t => ({ name: t.name, normalizedText: t.name.toLowerCase(), category: t.category, count: t.count })),
+        });
       }
 
-      const topics = Object.values(topicFreq)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, limit);
-      const wordCloudKeywords = Object.values(keywordFreq)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, limit * 3);
-
-      return res.status(200).json({
-        success: true,
-        source: 'openalex',
-        keyword,
-        startYear,
-        endYear,
-        totalPapers: papers.length,
-        topics: topics.map(t => ({ name: t.name, normalizedText: t.name.toLowerCase(), category: t.category, count: t.count })),
-        keywords: wordCloudKeywords.map(t => ({ name: t.name, normalizedText: t.name.toLowerCase(), category: t.category, count: t.count })),
-      });
+      if (openAlexError) {
+        console.warn('[insight] Falling back to local DB for top-topics:', openAlexError.message);
+      }
     }
 
     // ── Local DB fallback ──
+    const localMatch = buildInsightLocalMatch(startYear, endYear, keyword);
     const topicsPipeline = [
-      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $match: localMatch },
       { $unwind: '$keywordIds' },
       { $group: { _id: '$keywordIds', count: { $sum: 1 } } },
       { $lookup: { from: 'keywords', localField: '_id', foreignField: '_id', as: 'kw' } },
@@ -1022,7 +1056,7 @@ const getInsightTopTopics = async (req, res, next) => {
     ];
 
     const keywordsPipeline = [
-      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $match: localMatch },
       { $unwind: '$keywordIds' },
       { $group: { _id: '$keywordIds', count: { $sum: 1 } } },
       { $lookup: { from: 'keywords', localField: '_id', foreignField: '_id', as: 'kw' } },
@@ -1033,7 +1067,7 @@ const getInsightTopTopics = async (req, res, next) => {
     ];
 
     const totalPipeline = [
-      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $match: localMatch },
       { $count: 'total' },
     ];
 
@@ -1051,6 +1085,7 @@ const getInsightTopTopics = async (req, res, next) => {
       totalPapers: totalResult[0]?.total || 0,
       topics,
       keywords,
+      ...(keyword ? { warning: OPENALEX_UNAVAILABLE_WARNING } : {}),
     });
   } catch (error) {
     next(error);
@@ -1072,18 +1107,9 @@ const getInsightEmergingTrends = async (req, res, next) => {
 
     // ── OpenAlex live: dùng getInsightDataset ──
     if (keyword) {
-      let dataset = null;
-      try {
-        dataset = await academicApiService.getInsightDataset('openalex', keyword, {
-          startYear,
-          endYear,
-          maxPapers: 200,
-        });
-      } catch (err) {
-        console.warn('[insight] OpenAlex insight dataset failed:', err.message);
-      }
+      const { dataset } = await fetchInsightDatasetSafe(keyword, startYear, endYear);
 
-      if (dataset && dataset.papers && dataset.papers.length > 0) {
+      if (dataset?.papers?.length) {
         const papers = dataset.papers;
 
         // 1. Đếm tần suất + phân bố theo năm của từng keyword
@@ -1184,8 +1210,9 @@ const getInsightEmergingTrends = async (req, res, next) => {
     }
 
     // ── Local DB fallback ──
+    const localMatch = buildInsightLocalMatch(startYear, endYear, keyword);
     const pipeline = [
-      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $match: localMatch },
       { $unwind: '$keywordIds' },
       { $group: { _id: { keywordId: '$keywordIds', year: '$publicationYear' }, count: { $sum: 1 } } },
       { $group: { _id: '$_id.keywordId', yearlyData: { $push: { year: '$_id.year', count: '$count' } }, totalCount: { $sum: '$count' } } },
@@ -1244,6 +1271,7 @@ const getInsightEmergingTrends = async (req, res, next) => {
       startYear,
       endYear,
       trends: trends.slice(0, limit),
+      ...(keyword ? { warning: OPENALEX_UNAVAILABLE_WARNING } : {}),
     });
   } catch (error) {
     next(error);
@@ -1265,88 +1293,92 @@ const getInsightTopAffiliations = async (req, res, next) => {
 
     // ── OpenAlex live search ──
     if (keyword) {
-      const dataset = await academicApiService.getInsightDataset('openalex', keyword, {
-        startYear,
-        endYear,
-        maxPapers: 200,
-      });
-      const papers = dataset.papers;
+      const { dataset, openAlexError } = await fetchInsightDatasetSafe(keyword, startYear, endYear);
 
-      // Thống kê tổ chức (Affiliation) và tác giả dẫn đầu từ authorships của OpenAlex
-      const affMap = {};
-      const authorMap = {};
+      if (dataset?.papers?.length) {
+        const papers = dataset.papers;
 
-      for (const paper of papers) {
-        const paperId = paper.id || paper.title;
+        // Thống kê tổ chức (Affiliation) và tác giả dẫn đầu từ authorships của OpenAlex
+        const affMap = {};
+        const authorMap = {};
 
-        for (const author of paper.authors || []) {
-          const authorName = (author.name || '').trim();
-          if (!authorName) continue;
+        for (const paper of papers) {
+          const paperId = paper.id || paper.title;
 
-          const authorKey = authorName.toLowerCase();
-          if (!authorMap[authorKey]) {
-            authorMap[authorKey] = { name: authorName, papers: new Set(), affiliation: null };
-          }
-          authorMap[authorKey].papers.add(paperId);
+          for (const author of paper.authors || []) {
+            const authorName = (author.name || '').trim();
+            if (!authorName) continue;
 
-          for (const institution of author.institutions || []) {
-            const affName = (institution.name || '').trim();
-            if (!affName) continue;
-
-            const affKey = affName.toLowerCase();
-            if (!affMap[affKey]) {
-              affMap[affKey] = {
-                affiliation: affName,
-                country: institution.country || null,
-                papers: new Set(),
-                authors: new Set(),
-              };
+            const authorKey = authorName.toLowerCase();
+            if (!authorMap[authorKey]) {
+              authorMap[authorKey] = { name: authorName, papers: new Set(), affiliation: null };
             }
-            affMap[affKey].papers.add(paperId);
-            affMap[affKey].authors.add(authorName);
+            authorMap[authorKey].papers.add(paperId);
 
-            if (!authorMap[authorKey].affiliation) {
-              authorMap[authorKey].affiliation = affName;
+            for (const institution of author.institutions || []) {
+              const affName = (institution.name || '').trim();
+              if (!affName) continue;
+
+              const affKey = affName.toLowerCase();
+              if (!affMap[affKey]) {
+                affMap[affKey] = {
+                  affiliation: affName,
+                  country: institution.country || null,
+                  papers: new Set(),
+                  authors: new Set(),
+                };
+              }
+              affMap[affKey].papers.add(paperId);
+              affMap[affKey].authors.add(authorName);
+
+              if (!authorMap[authorKey].affiliation) {
+                authorMap[authorKey].affiliation = affName;
+              }
             }
           }
         }
+
+        const affiliations = Object.values(affMap)
+          .map(a => ({
+            affiliation: a.affiliation,
+            country: a.country,
+            paperCount: a.papers.size,
+            authorCount: a.authors.size,
+            topAuthors: Array.from(a.authors).slice(0, 5),
+          }))
+          .sort((a, b) => b.paperCount - a.paperCount)
+          .slice(0, limit);
+
+        const authors = Object.values(authorMap)
+          .map(a => ({
+            name: a.name,
+            paperCount: a.papers.size,
+            affiliation: a.affiliation || '',
+          }))
+          .filter(a => a.paperCount >= 1)
+          .sort((a, b) => b.paperCount - a.paperCount)
+          .slice(0, limit);
+
+        return res.status(200).json({
+          success: true,
+          source: 'openalex',
+          keyword,
+          startYear,
+          endYear,
+          affiliations,
+          authors,
+        });
       }
 
-      const affiliations = Object.values(affMap)
-        .map(a => ({
-          affiliation: a.affiliation,
-          country: a.country,
-          paperCount: a.papers.size,
-          authorCount: a.authors.size,
-          topAuthors: Array.from(a.authors).slice(0, 5),
-        }))
-        .sort((a, b) => b.paperCount - a.paperCount)
-        .slice(0, limit);
-
-      const authors = Object.values(authorMap)
-        .map(a => ({
-          name: a.name,
-          paperCount: a.papers.size,
-          affiliation: a.affiliation || '',
-        }))
-        .filter(a => a.paperCount >= 1)
-        .sort((a, b) => b.paperCount - a.paperCount)
-        .slice(0, limit);
-
-      return res.status(200).json({
-        success: true,
-        source: 'openalex',
-        keyword,
-        startYear,
-        endYear,
-        affiliations,
-        authors,
-      });
+      if (openAlexError) {
+        console.warn('[insight] Falling back to local DB for top-affiliations:', openAlexError.message);
+      }
     }
 
     // ── Local DB fallback ──
+    const localMatch = buildInsightLocalMatch(startYear, endYear, keyword);
     const affiliationPipeline = [
-      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $match: localMatch },
       { $unwind: '$authors' },
       { $unwind: { path: '$authors.affiliations', preserveNullAndEmptyArrays: false } },
       { $group: { _id: { $toLower: { $trim: { input: '$authors.affiliations' } } }, paperCount: { $addToSet: '$_id' }, authorNames: { $addToSet: '$authors.name' } } },
@@ -1357,7 +1389,7 @@ const getInsightTopAffiliations = async (req, res, next) => {
     ];
 
     const authorPipeline = [
-      { $match: { publicationYear: { $gte: startYear, $lte: endYear } } },
+      { $match: localMatch },
       { $unwind: '$authors' },
       { $group: { _id: { $toLower: { $trim: { input: '$authors.name' } } }, displayName: { $first: '$authors.name' }, paperCount: { $addToSet: '$_id' }, affiliations: { $addToSet: { $arrayElemAt: ['$authors.affiliations', 0] } } } },
       { $project: { _id: 0, name: '$displayName', paperCount: { $size: '$paperCount' }, affiliation: { $arrayElemAt: ['$affiliations', 0] } } },
@@ -1378,6 +1410,7 @@ const getInsightTopAffiliations = async (req, res, next) => {
       endYear,
       affiliations,
       authors,
+      ...(keyword ? { warning: OPENALEX_UNAVAILABLE_WARNING } : {}),
     });
   } catch (error) {
     next(error);

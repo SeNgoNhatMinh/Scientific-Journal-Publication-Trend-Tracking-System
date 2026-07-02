@@ -73,10 +73,11 @@ const exaClient = axios.create({
   timeout: apiTimeout,
 });
 
-/** OpenAlex polite pool: https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication */
+/** OpenAlex polite pool + optional API key: https://developers.openalex.org/guides/authentication */
 const withOpenAlexParams = params => ({
   ...params,
   mailto: envConfig.OPENALEX_MAILTO,
+  ...(envConfig.OPENALEX_API_KEY ? { api_key: envConfig.OPENALEX_API_KEY } : {}),
 });
 
 const toProviderError = (source, error) => {
@@ -87,6 +88,10 @@ const toProviderError = (source, error) => {
   let message = `${source} request failed: ${error.message}`;
   if (statusCode === 401 || statusCode === 403) {
     message = `${source} rejected the request. Check that the API key is active and allowed for this endpoint.`;
+  }
+  if (statusCode === 503 && source === 'OpenAlex') {
+    message =
+      'OpenAlex search is temporarily unavailable (rate limited). Set OPENALEX_API_KEY in backend env (free at openalex.org/settings/api) or retry later.';
   }
   if (/Developer Inactive/i.test(bodyText)) {
     message = `${source} rejected the request: Developer Inactive. Activate the IEEE developer account/key before using this source.`;
@@ -1322,10 +1327,20 @@ const getInsightDataset = async (source, keyword, options = {}) => {
   }
 
   let response;
-  try {
-    response = await openAlexClient.get('/works', { params });
-  } catch (error) {
-    toProviderError('OpenAlex', error);
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      response = await openAlexClient.get('/works', { params });
+      break;
+    } catch (error) {
+      const status = error.response?.status;
+      const retryable = status === 429 || status === 503;
+      if (retryable && attempt < maxAttempts) {
+        await sleep(800 * attempt);
+        continue;
+      }
+      toProviderError('OpenAlex', error);
+    }
   }
 
   const papers = (response.data.results || []).map(mapOpenAlexInsightWork);

@@ -231,6 +231,7 @@ export default function InsightsPage() {
   const [endYear, setEndYear] = useState(currentYear)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [warning, setWarning] = useState("")
   const [activeSource, setActiveSource] = useState<"openalex" | "local">("local")
 
   // Section 1: Top Topics & Keywords
@@ -253,6 +254,7 @@ export default function InsightsPage() {
   const fetchInsights = useCallback(async () => {
     setIsLoading(true)
     setError("")
+    setWarning("")
 
     const trimmedKeyword = keyword.trim()
     const params: Record<string, string | number> = { startYear, endYear }
@@ -266,24 +268,44 @@ export default function InsightsPage() {
         api.get("/trends/insights/top-affiliations", { params }),
       ])
 
+      const warnings = new Set<string>()
+      let resolvedSource: "openalex" | "local" = trimmedKeyword ? "openalex" : "local"
+
       if (topTopicsRes.status === "fulfilled") {
         setTopics(topTopicsRes.value.data.topics || [])
         setKeywords(topTopicsRes.value.data.keywords || [])
         setTotalPapers(topTopicsRes.value.data.totalPapers || 0)
+        if (topTopicsRes.value.data.source === "local" && trimmedKeyword) {
+          resolvedSource = "local"
+        }
+        if (topTopicsRes.value.data.warning) warnings.add(topTopicsRes.value.data.warning)
       }
 
       if (emergingRes.status === "fulfilled") {
         setTrends(emergingRes.value.data.trends || [])
+        if (emergingRes.value.data.source === "local" && trimmedKeyword) {
+          resolvedSource = "local"
+        }
+        if (emergingRes.value.data.warning) warnings.add(emergingRes.value.data.warning)
       }
 
       if (affiliationsRes.status === "fulfilled") {
         setAffiliations(affiliationsRes.value.data.affiliations || [])
         setAuthors(affiliationsRes.value.data.authors || [])
+        if (affiliationsRes.value.data.source === "local" && trimmedKeyword) {
+          resolvedSource = "local"
+        }
+        if (affiliationsRes.value.data.warning) warnings.add(affiliationsRes.value.data.warning)
       }
+
+      setActiveSource(resolvedSource)
+      if (warnings.size) setWarning(Array.from(warnings)[0])
 
       const allFailed = [topTopicsRes, emergingRes, affiliationsRes].every(r => r.status === "rejected")
       if (allFailed) {
-        setError("Không thể tải dữ liệu Insight. Kiểm tra kết nối backend.")
+        const firstError = topTopicsRes.status === "rejected" ? topTopicsRes.reason : null
+        const apiMessage = firstError?.response?.data?.message
+        setError(apiMessage || "Không thể tải dữ liệu Insight. Kiểm tra kết nối backend.")
       }
 
       setHasLoaded(true)
@@ -393,8 +415,18 @@ export default function InsightsPage() {
         </div>
       </motion.div>
 
-      {/* ═══ Error ═══ */}
+      {/* ═══ Error / Warning ═══ */}
       <AnimatePresence>
+        {warning && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            className="rounded-xl px-4 py-3 text-sm border bg-amber-500/10 border-amber-500/20 text-amber-200"
+          >
+            {warning}
+          </motion.div>
+        )}
         {error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
