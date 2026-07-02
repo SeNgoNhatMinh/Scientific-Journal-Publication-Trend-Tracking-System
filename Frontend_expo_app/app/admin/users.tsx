@@ -159,7 +159,7 @@ export default function AdminUsersScreen() {
           <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
           <TextInput
             placeholder="Search users by name or email..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mutedForeground}
             value={search}
             onChangeText={setSearch}
             style={[styles.searchInput, { color: theme.text }]}
@@ -174,7 +174,7 @@ export default function AdminUsersScreen() {
       ) : users.length === 0 ? (
         <View style={styles.centerContainer}>
           <Users size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-          <Text style={[styles.emptyText, { color: theme.muted }]}>No users found.</Text>
+          <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No users found.</Text>
         </View>
       ) : (
         <FlatList
@@ -194,7 +194,7 @@ export default function AdminUsersScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.userName, { color: theme.text }]}>{item.name}</Text>
-                    <Text style={[styles.userEmail, { color: theme.muted }]}>{item.email}</Text>
+                    <Text style={[styles.userEmail, { color: theme.mutedForeground }]}>{item.email}</Text>
                   </View>
                 </View>
 
@@ -267,7 +267,7 @@ export default function AdminUsersScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Change User Role</Text>
-            <Text style={[styles.modalSubtitle, { color: theme.muted }]}>Select a new role for this user:</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.mutedForeground }]}>Select a new role for this user:</Text>
             
             <View style={styles.roleOptionsContainer}>
               {['student', 'researcher', 'lecturer', 'admin'].map((role) => {

@@ -10,7 +10,6 @@ import {
   useColorScheme,
   FlatList,
   Linking,
-  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +19,6 @@ import {
   Filter,
   Bookmark,
   ExternalLink,
-  ChevronDown,
   Sparkles,
   ArrowRight,
 } from 'lucide-react-native';
@@ -49,14 +47,14 @@ export default function ExploreScreen() {
   const [page, setPage] = useState(1);
 
   const [papers, setPapers] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
+
   const [isLoading, setIsLoading] = useState(false);
   const [savingPaperId, setSavingPaperId] = useState<string | null>(null);
   const [savedPaperIds, setSavedPaperIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isSuggesting, setIsSuggesting] = useState(false);
+
   const [showFilters, setShowFilters] = useState(false);
 
   // Sync route param
@@ -65,6 +63,7 @@ export default function ExploreScreen() {
       setKeyword(initialKeyword);
       fetchResults(initialKeyword, source, 1);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialKeyword]);
 
   const fetchResults = async (query: string, sourceOverride = source, pageNum = 1) => {
@@ -76,7 +75,7 @@ export default function ExploreScreen() {
       if (year) params.year = parseInt(year);
       const res = await api.get('/sources/search', { params });
       setPapers(res.data.papers || []);
-      setTotal(res.data.total || 0);
+
       setPage(pageNum);
       fetchSuggestions(query);
     } catch (err: any) {
@@ -96,15 +95,12 @@ export default function ExploreScreen() {
 
   const fetchSuggestions = async (query: string) => {
     if (!query) return;
-    setIsSuggesting(true);
     setSuggestions([]);
     try {
       const res = await api.get('/sources/suggest', { params: { keyword: query } });
       setSuggestions(res.data.suggestions || []);
     } catch (err) {
       console.warn('Gemini suggestions failed:', err);
-    } finally {
-      setIsSuggesting(false);
     }
   };
 
@@ -211,7 +207,7 @@ export default function ExploreScreen() {
           <SearchIcon size={18} color={theme.icon} style={styles.searchIcon} />
           <TextInput
             placeholder="Search papers, DOI, topic..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mutedForeground}
             value={keyword}
             onChangeText={setKeyword}
             style={[styles.searchInput, { color: theme.text }]}
@@ -230,7 +226,7 @@ export default function ExploreScreen() {
           <View style={[styles.filtersPanel, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.filterRow}>
               <View style={styles.filterCol}>
-                <Text style={[styles.filterLabel, { color: theme.muted }]}>SOURCE</Text>
+                <Text style={[styles.filterLabel, { color: theme.mutedForeground }]}>SOURCE</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
                   {Object.keys(SOURCE_META).map((s) => (
                     <TouchableOpacity
@@ -253,7 +249,7 @@ export default function ExploreScreen() {
 
             <View style={styles.filterRow}>
               <View style={styles.filterCol}>
-                <Text style={[styles.filterLabel, { color: theme.muted }]}>YEAR</Text>
+                <Text style={[styles.filterLabel, { color: theme.mutedForeground }]}>YEAR</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
                   <TouchableOpacity
                     onPress={() => setYear('')}
@@ -304,7 +300,7 @@ export default function ExploreScreen() {
         <View style={styles.suggestionsContainer}>
           <View style={styles.suggestionTitleRow}>
             <Sparkles size={13} color={theme.primary} />
-            <Text style={[styles.suggestionTitle, { color: theme.muted }]}>Related Topics:</Text>
+            <Text style={[styles.suggestionTitle, { color: theme.mutedForeground }]}>Related Topics:</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionList}>
             {suggestions.map((s) => (
@@ -327,7 +323,7 @@ export default function ExploreScreen() {
       {isLoading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={[styles.loadingText, { color: theme.muted }]}>Searching millions of academic papers...</Text>
+          <Text style={[styles.loadingText, { color: theme.mutedForeground }]}>Searching millions of academic papers...</Text>
         </View>
       ) : error ? (
         <View style={styles.centerContainer}>
@@ -347,7 +343,7 @@ export default function ExploreScreen() {
       ) : papers.length === 0 ? (
         <View style={styles.centerContainer}>
           <SearchIcon size={48} color={theme.icon} style={{ opacity: 0.3, marginBottom: 12 }} />
-          <Text style={[styles.emptyText, { color: theme.muted }]}>
+          <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>
             {keyword ? 'No papers found. Try adjusting keywords.' : 'Enter keyword to find papers.'}
           </Text>
         </View>
@@ -375,13 +371,13 @@ export default function ExploreScreen() {
                 </View>
 
                 {/* Author / Date */}
-                <Text style={[styles.paperAuthors, { color: theme.muted }]}>
+                <Text style={[styles.paperAuthors, { color: theme.mutedForeground }]}>
                   {formatAuthors(item.authors)} · {item.publicationYear || 'N/A'}
                   {item.citationCount > 0 && ` · ${item.citationCount} citations`}
                 </Text>
 
                 {/* Snippet abstract */}
-                <Text style={[styles.paperAbstract, { color: theme.muted }]} numberOfLines={3}>
+                <Text style={[styles.paperAbstract, { color: theme.mutedForeground }]} numberOfLines={3}>
                   {item.abstract || 'No abstract available.'}
                 </Text>
 

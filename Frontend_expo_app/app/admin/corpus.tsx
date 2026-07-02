@@ -255,7 +255,7 @@ export default function AdminCorpusScreen() {
                 </View>
                 <View>
                   <Text style={[styles.statValue, { color: theme.text }]}>{s.value}</Text>
-                  <Text style={[styles.statLabel, { color: theme.muted }]}>{s.label}</Text>
+                  <Text style={[styles.statLabel, { color: theme.mutedForeground }]}>{s.label}</Text>
                 </View>
               </View>
             ))}
@@ -268,7 +268,7 @@ export default function AdminCorpusScreen() {
             <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
             <TextInput
               placeholder="Search by keyword..."
-              placeholderTextColor={theme.muted}
+              placeholderTextColor={theme.mutedForeground}
               value={search}
               onChangeText={setSearch}
               style={[styles.searchInput, { color: theme.text }]}
@@ -289,7 +289,7 @@ export default function AdminCorpusScreen() {
         ) : filteredRuns.length === 0 ? (
           <View style={styles.centerContainer}>
             <Database size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-            <Text style={[styles.emptyText, { color: theme.muted }]}>No corpus runs found.</Text>
+            <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No corpus runs found.</Text>
           </View>
         ) : (
           <FlatList
@@ -313,7 +313,7 @@ export default function AdminCorpusScreen() {
                       <Text style={[styles.cardTitle, { color: theme.text }]}>
                         {item.seedKeyword || item.keyword || item.query || 'Unnamed'}
                       </Text>
-                      <Text style={[styles.cardSubtitle, { color: theme.muted }]}>
+                      <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
                         Range: {item.startYear} - {item.endYear} • Max: {item.maxPages} pgs
                       </Text>
                     </View>
@@ -410,10 +410,10 @@ export default function AdminCorpusScreen() {
 
               <ScrollView contentContainerStyle={styles.formContainer}>
                 <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Seed Keyword *</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Seed Keyword *</Text>
                   <TextInput
                     placeholder="e.g. machine learning"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     value={seedKeyword}
                     onChangeText={setSeedKeyword}
                     style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -422,10 +422,10 @@ export default function AdminCorpusScreen() {
 
                 <View style={styles.rowInputs}>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={[styles.inputLabel, { color: theme.muted }]}>Start Year</Text>
+                    <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Start Year</Text>
                     <TextInput
                       placeholder="e.g. 2018"
-                      placeholderTextColor={theme.muted}
+                      placeholderTextColor={theme.mutedForeground}
                       keyboardType="numeric"
                       value={startYear}
                       onChangeText={setStartYear}
@@ -433,10 +433,10 @@ export default function AdminCorpusScreen() {
                     />
                   </View>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={[styles.inputLabel, { color: theme.muted }]}>End Year</Text>
+                    <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>End Year</Text>
                     <TextInput
                       placeholder="e.g. 2024"
-                      placeholderTextColor={theme.muted}
+                      placeholderTextColor={theme.mutedForeground}
                       keyboardType="numeric"
                       value={endYear}
                       onChangeText={setEndYear}
@@ -447,10 +447,10 @@ export default function AdminCorpusScreen() {
 
                 <View style={styles.rowInputs}>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={[styles.inputLabel, { color: theme.muted }]}>Max Pages (25 works/pg)</Text>
+                    <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Max Pages (25 works/pg)</Text>
                     <TextInput
                       placeholder="e.g. 4"
-                      placeholderTextColor={theme.muted}
+                      placeholderTextColor={theme.mutedForeground}
                       keyboardType="numeric"
                       value={maxPages}
                       onChangeText={setMaxPages}
@@ -458,10 +458,10 @@ export default function AdminCorpusScreen() {
                     />
                   </View>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={[styles.inputLabel, { color: theme.muted }]}>Per Page</Text>
+                    <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Per Page</Text>
                     <TextInput
                       placeholder="e.g. 25"
-                      placeholderTextColor={theme.muted}
+                      placeholderTextColor={theme.mutedForeground}
                       keyboardType="numeric"
                       value={perPage}
                       onChangeText={setPerPage}

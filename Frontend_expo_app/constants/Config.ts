@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
 
 // OPTION 1: Set this boolean to true to force using the production Railway URL.
 // Set to false to use the local backend / environment variables.
-const FORCE_PRODUCTION = true;
+const FORCE_PRODUCTION = false;
 
 // OPTION 2: Set your computer's local IP address here if testing on a physical device
 // and automatic IP detection fails (e.g. '192.168.1.15'). Leave empty '' to use auto-detection.

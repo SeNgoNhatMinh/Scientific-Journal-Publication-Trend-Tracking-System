@@ -28,6 +28,7 @@ const openalexClient = axios.create({
 const withOpenAlexParams = params => ({
   ...params,
   mailto: envConfig.OPENALEX_MAILTO,
+  ...(envConfig.OPENALEX_API_KEY ? { api_key: envConfig.OPENALEX_API_KEY } : {}),
 });
 
 /**

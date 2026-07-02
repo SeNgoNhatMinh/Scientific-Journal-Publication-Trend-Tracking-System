@@ -197,7 +197,7 @@ export default function AdminKeywordsScreen() {
           <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
           <TextInput
             placeholder="Search keywords..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mutedForeground}
             value={search}
             onChangeText={setSearch}
             style={[styles.searchInput, { color: theme.text }]}
@@ -218,7 +218,7 @@ export default function AdminKeywordsScreen() {
       ) : keywords.length === 0 ? (
         <View style={styles.centerContainer}>
           <Tag size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-          <Text style={[styles.emptyText, { color: theme.muted }]}>No keywords found.</Text>
+          <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No keywords found.</Text>
         </View>
       ) : (
         <FlatList
@@ -232,7 +232,7 @@ export default function AdminKeywordsScreen() {
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>#{item.name}</Text>
-                    <Text style={[styles.cardSubtitle, { color: theme.muted }]}>
+                    <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
                       Papers: {item.paperCount.toLocaleString()} | Citations: {item.citationCount.toLocaleString()}
                     </Text>
                   </View>
@@ -316,10 +316,10 @@ export default function AdminKeywordsScreen() {
 
             <ScrollView contentContainerStyle={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Keyword Name *</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Keyword Name *</Text>
                 <TextInput
                   placeholder="e.g. machine learning"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={name}
                   onChangeText={setName}
                   autoCapitalize="none"
@@ -328,7 +328,7 @@ export default function AdminKeywordsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Category</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Category</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catSelectorRow}>
                   {Object.keys(CATEGORY_COLORS).map((cat) => (
                     <TouchableOpacity
@@ -351,10 +351,10 @@ export default function AdminKeywordsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>OpenAlex ID</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>OpenAlex ID</Text>
                 <TextInput
                   placeholder="e.g. C119302"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={openalexId}
                   onChangeText={setOpenalexId}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -362,10 +362,10 @@ export default function AdminKeywordsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Description</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Description</Text>
                 <TextInput
                   placeholder="Define the keyword topic..."
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   multiline
                   numberOfLines={2}
                   value={description}
@@ -386,7 +386,7 @@ export default function AdminKeywordsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Paper Count</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Paper Count</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={paperCount}
@@ -395,7 +395,7 @@ export default function AdminKeywordsScreen() {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Citation Count</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Citation Count</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={citationCount}
@@ -407,7 +407,7 @@ export default function AdminKeywordsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Trend Score</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Trend Score</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={trendScore}
@@ -416,10 +416,10 @@ export default function AdminKeywordsScreen() {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Growth Rate (0-1)</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Growth Rate (0-1)</Text>
                   <TextInput
                     placeholder="e.g. 0.25"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     keyboardType="numeric"
                     value={growthRate}
                     onChangeText={setGrowthRate}

@@ -178,7 +178,7 @@ export default function AdminAuthorsScreen() {
           <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
           <TextInput
             placeholder="Search authors by name..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mutedForeground}
             value={search}
             onChangeText={setSearch}
             style={[styles.searchInput, { color: theme.text }]}
@@ -199,7 +199,7 @@ export default function AdminAuthorsScreen() {
       ) : authors.length === 0 ? (
         <View style={styles.centerContainer}>
           <Users size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-          <Text style={[styles.emptyText, { color: theme.muted }]}>No authors found.</Text>
+          <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No authors found.</Text>
         </View>
       ) : (
         <FlatList
@@ -216,7 +216,7 @@ export default function AdminAuthorsScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>{item.fullName}</Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.muted }]} numberOfLines={1}>
+                  <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]} numberOfLines={1}>
                     {item.affiliation || 'No Affiliation'}
                   </Text>
                 </View>
@@ -283,10 +283,10 @@ export default function AdminAuthorsScreen() {
 
             <ScrollView contentContainerStyle={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Full Name *</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Full Name *</Text>
                 <TextInput
                   placeholder="e.g. John Doe"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={fullName}
                   onChangeText={setFullName}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -294,10 +294,10 @@ export default function AdminAuthorsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>ORCID ID</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>ORCID ID</Text>
                 <TextInput
                   placeholder="e.g. 0000-0002-1825-0097"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={orcid}
                   onChangeText={setOrcid}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -305,10 +305,10 @@ export default function AdminAuthorsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Affiliation</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Affiliation</Text>
                 <TextInput
                   placeholder="e.g. Stanford University"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={affiliation}
                   onChangeText={setAffiliation}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -316,10 +316,10 @@ export default function AdminAuthorsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>OpenAlex ID</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>OpenAlex ID</Text>
                 <TextInput
                   placeholder="e.g. A5012345678"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={openalexId}
                   onChangeText={setOpenalexId}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -327,10 +327,10 @@ export default function AdminAuthorsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Works Count</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Works Count</Text>
                 <TextInput
                   placeholder="e.g. 45"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   keyboardType="numeric"
                   value={worksCount}
                   onChangeText={setWorksCount}

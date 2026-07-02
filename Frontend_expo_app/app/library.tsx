@@ -24,9 +24,10 @@ import {
   ArrowRight,
   BookmarkX,
   ExternalLink,
+  ChevronLeft,
 } from 'lucide-react-native';
-import api from '../../lib/api';
-import { Colors } from '../../constants/theme';
+import api from '../lib/api';
+import { Colors } from '../constants/theme';
 
 const WORKSPACE_COLORS = [
   '#8B2CE512',
@@ -144,6 +145,9 @@ export default function LibraryScreen() {
       {/* Header with segment picker */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top + 10, 20) }]}>
         <View style={styles.titleRow}>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+            <ChevronLeft size={28} color={theme.text} />
+          </TouchableOpacity>
           <LibraryIcon size={24} color={theme.primary} />
           <Text style={[styles.title, { color: theme.text }]}>My Library</Text>
         </View>
@@ -196,7 +200,7 @@ export default function LibraryScreen() {
               <Search size={18} color={theme.icon} style={styles.searchIcon} />
               <TextInput
                 placeholder="Search saved papers..."
-                placeholderTextColor={theme.muted}
+                placeholderTextColor={theme.mutedForeground}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 style={[styles.searchInput, { color: theme.text }]}
@@ -211,7 +215,7 @@ export default function LibraryScreen() {
           ) : filteredBookmarks.length === 0 ? (
             <View style={styles.centerContainer}>
               <FileText size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-              <Text style={[styles.emptyText, { color: theme.muted }]}>
+              <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>
                 {searchQuery ? 'No matching bookmarks found.' : 'Your reading list is empty.'}
               </Text>
             </View>
@@ -229,10 +233,10 @@ export default function LibraryScreen() {
                         {item.title}
                       </Text>
                     </TouchableOpacity>
-                    <Text style={[styles.paperMeta, { color: theme.muted }]}>
+                    <Text style={[styles.paperMeta, { color: theme.mutedForeground }]}>
                       {formatAuthors(item.authors)} · {item.publicationYear || 'N/A'}
                     </Text>
-                    <Text style={[styles.paperDesc, { color: theme.muted }]} numberOfLines={2}>
+                    <Text style={[styles.paperDesc, { color: theme.mutedForeground }]} numberOfLines={2}>
                       {item.abstract || 'No abstract available.'}
                     </Text>
 
@@ -265,7 +269,7 @@ export default function LibraryScreen() {
       {activeSegment === 'workspaces' && (
         <View style={{ flex: 1 }}>
           <View style={styles.actionHeader}>
-            <Text style={[styles.actionLabel, { color: theme.muted }]}>
+            <Text style={[styles.actionLabel, { color: theme.mutedForeground }]}>
               {workspaces.length} research directories
             </Text>
             <TouchableOpacity
@@ -284,7 +288,7 @@ export default function LibraryScreen() {
           ) : workspaces.length === 0 ? (
             <View style={styles.centerContainer}>
               <FolderKanban size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-              <Text style={[styles.emptyText, { color: theme.muted }]}>No workspaces found. Create one to organize.</Text>
+              <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No workspaces found. Create one to organize.</Text>
             </View>
           ) : (
             <FlatList
@@ -303,7 +307,7 @@ export default function LibraryScreen() {
                       <FolderKanban size={20} color={theme.primary} style={{ marginRight: 8 }} />
                       <Text style={[styles.wsTitle, { color: theme.text }]}>{item.name}</Text>
                     </View>
-                    <Text style={[styles.wsDesc, { color: theme.muted }]} numberOfLines={2}>
+                    <Text style={[styles.wsDesc, { color: theme.mutedForeground }]} numberOfLines={2}>
                       {item.description || 'No description provided.'}
                     </Text>
 
@@ -334,20 +338,20 @@ export default function LibraryScreen() {
             <View style={styles.modalOverlay}>
               <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <Text style={[styles.modalTitle, { color: theme.text }]}>Create New Workspace</Text>
-                <Text style={[styles.modalDesc, { color: theme.muted }]}>
+                <Text style={[styles.modalDesc, { color: theme.mutedForeground }]}>
                   Workspaces group related papers, notes, and map key-terms.
                 </Text>
 
                 <TextInput
                   placeholder="Workspace Name"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={newWsName}
                   onChangeText={setNewWsName}
                   style={[styles.modalInput, { color: theme.text, borderColor: theme.border }]}
                 />
                 <TextInput
                   placeholder="Short Description (optional)"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={newWsDesc}
                   onChangeText={setNewWsDesc}
                   style={[styles.modalInput, { color: theme.text, borderColor: theme.border }]}

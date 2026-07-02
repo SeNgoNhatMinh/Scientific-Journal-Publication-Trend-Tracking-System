@@ -2,35 +2,35 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#18181b',
-    background: '#f4f6fa',
+    text: '#0f172a',
+    background: '#f8fafc',
     card: '#ffffff',
-    primary: '#7c3aed',
+    primary: '#8b5cf6',
     primaryForeground: '#ffffff',
     secondary: '#f1f5f9',
     secondaryForeground: '#0f172a',
-    muted: '#71717a',
-    mutedForeground: '#a1a1aa',
+    muted: '#f1f5f9',
+    mutedForeground: '#64748b',
     accent: '#06b6d4',
     success: '#10b981',
     destructive: '#ef4444',
-    border: '#cbd5e1',
-    tint: '#7c3aed',
-    icon: '#71717a',
-    tabIconDefault: '#71717a',
-    tabIconSelected: '#7c3aed',
+    border: '#e2e8f0',
+    tint: '#8b5cf6',
+    icon: '#64748b',
+    tabIconDefault: '#64748b',
+    tabIconSelected: '#8b5cf6',
   },
   dark: {
-    text: '#ebedf5',
-    background: '#0f111a',
-    card: '#161925',
-    primary: '#a855f7',
-    primaryForeground: '#0f111a',
+    text: '#f8fafc',
+    background: '#0b0c10', // Deeper dark
+    card: '#161923',      // Slightly elevated
+    primary: '#a855f7',    // Neon purple
+    primaryForeground: '#0b0c10',
     secondary: '#1e2230',
-    secondaryForeground: '#ebedf5',
-    muted: '#606475',
-    mutedForeground: '#a1a5b8',
-    accent: '#22d5e6',
+    secondaryForeground: '#f8fafc',
+    muted: '#1e2230',
+    mutedForeground: '#94a3b8',
+    accent: '#22d5e6',     // Cyan
     success: '#34d399',
     destructive: '#f87171',
     border: '#1e2230',
@@ -39,6 +39,16 @@ export const Colors = {
     tabIconDefault: '#606475',
     tabIconSelected: '#a855f7',
   },
+};
+
+export const CategoryColors: Record<string, string> = {
+  domain: '#3b82f6',
+  algorithm: '#ef4444',
+  application: '#22c55e',
+  method: '#a855f7',
+  dataset: '#f97316',
+  tool: '#06b6d4',
+  general: '#6b7280',
 };
 
 export const Fonts = Platform.select({
