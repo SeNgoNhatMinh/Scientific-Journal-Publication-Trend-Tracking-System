@@ -17,6 +17,7 @@ const openAlexClient = axios.create({
 const withOpenAlexParams = params => ({
   ...params,
   mailto: envConfig.OPENALEX_MAILTO,
+  ...(envConfig.OPENALEX_API_KEY ? { api_key: envConfig.OPENALEX_API_KEY } : {}),
 });
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

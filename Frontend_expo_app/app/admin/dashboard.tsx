@@ -154,7 +154,7 @@ export default function AdminDashboardScreen() {
             <Shield size={24} color={theme.destructive} />
             <Text style={[styles.title, { color: theme.text }]}>Admin Panel</Text>
           </View>
-        <Text style={[styles.subtitle, { color: theme.muted }]}>
+        <Text style={[styles.subtitle, { color: theme.mutedForeground }]}>
           Monitor system metrics, manage database parameters, and analyze corpus jobs.
         </Text>
       </View>
@@ -180,7 +180,7 @@ export default function AdminDashboardScreen() {
                   <stat.icon size={20} color={stat.color} />
                 </View>
                 <Text style={[styles.statValue, { color: theme.text }]}>{stat.value}</Text>
-                <Text style={[styles.statLabel, { color: theme.muted }]}>{stat.label}</Text>
+                <Text style={[styles.statLabel, { color: theme.mutedForeground }]}>{stat.label}</Text>
               </View>
             ))}
           </View>
@@ -296,14 +296,14 @@ export default function AdminDashboardScreen() {
             </View>
 
             {activities.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.muted }]}>No recent notifications.</Text>
+              <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No recent notifications.</Text>
             ) : (
               activities.map((notif, idx) => (
                 <View key={idx} style={[styles.notifItem, { borderBottomColor: theme.border }]}>
                   <Text style={[styles.notifTitle, { color: theme.text }]} numberOfLines={1}>
                     {notif.title || notif.message || 'System Notification'}
                   </Text>
-                  <Text style={[styles.notifDesc, { color: theme.muted }]} numberOfLines={1}>
+                  <Text style={[styles.notifDesc, { color: theme.mutedForeground }]} numberOfLines={1}>
                     {notif.message || notif.detail || ''}
                   </Text>
                 </View>

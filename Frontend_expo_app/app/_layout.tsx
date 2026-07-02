@@ -14,8 +14,8 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerStyle: { backgroundColor: colorScheme === 'dark' ? '#161925' : '#ffffff' }, headerTintColor: colorScheme === 'dark' ? '#ebedf5' : '#18181b' }}>
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="paper/[id]" options={{ title: 'Paper Details', headerBackTitle: 'Back' }} />
         <Stack.Screen name="workspace/[id]" options={{ title: 'Workspace Details', headerBackTitle: 'Back' }} />
         <Stack.Screen name="admin/dashboard" options={{ title: 'Admin Dashboard', headerBackTitle: 'Back' }} />

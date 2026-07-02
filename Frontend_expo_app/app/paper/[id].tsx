@@ -187,7 +187,7 @@ export default function PaperDetailsScreen() {
     return (
       <View style={[styles.centerContainer, { backgroundColor: theme.background }]}>
         <ActivityIndicator size="large" color={theme.primary} />
-        <Text style={[styles.loadingText, { color: theme.muted }]}>Loading paper details...</Text>
+        <Text style={[styles.loadingText, { color: theme.mutedForeground }]}>Loading paper details...</Text>
       </View>
     );
   }
@@ -215,13 +215,13 @@ export default function PaperDetailsScreen() {
         {paper.publicationYear && (
           <View style={styles.metaTextItem}>
             <Calendar size={14} color={theme.icon} />
-            <Text style={[styles.metaText, { color: theme.muted }]}>{paper.publicationYear}</Text>
+            <Text style={[styles.metaText, { color: theme.mutedForeground }]}>{paper.publicationYear}</Text>
           </View>
         )}
         {paper.citationCount > 0 && (
           <View style={styles.metaTextItem}>
             <Quote size={14} color={theme.icon} />
-            <Text style={[styles.metaText, { color: theme.muted }]}>{paper.citationCount} citations</Text>
+            <Text style={[styles.metaText, { color: theme.mutedForeground }]}>{paper.citationCount} citations</Text>
           </View>
         )}
       </View>
@@ -230,9 +230,9 @@ export default function PaperDetailsScreen() {
       <Text style={[styles.title, { color: theme.text }]}>{paper.title}</Text>
 
       {/* Authors */}
-      <Text style={[styles.authors, { color: theme.muted }]}>{formatAuthors(paper.authors)}</Text>
+      <Text style={[styles.authors, { color: theme.mutedForeground }]}>{formatAuthors(paper.authors)}</Text>
       {paper.journalName ? (
-        <Text style={[styles.journal, { color: theme.muted }]}>{paper.journalName}</Text>
+        <Text style={[styles.journal, { color: theme.mutedForeground }]}>{paper.journalName}</Text>
       ) : null}
 
       {/* Quick Action Bar */}
@@ -265,7 +265,7 @@ export default function PaperDetailsScreen() {
           <Upload size={16} color={theme.primary} />
           <Text style={[styles.cardTitle, { color: theme.text }]}>Research File & AI Ingestion</Text>
         </View>
-        <Text style={[styles.cardDesc, { color: theme.muted }]}>
+        <Text style={[styles.cardDesc, { color: theme.mutedForeground }]}>
           Upload the full paper PDF so the AI can perform deep reading.
         </Text>
 
@@ -339,15 +339,15 @@ export default function PaperDetailsScreen() {
           {aiInsight && (
             <View style={styles.insightGrid}>
               <View style={[styles.insightBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                <Text style={[styles.insightLabel, { color: theme.muted }]}>Problem</Text>
+                <Text style={[styles.insightLabel, { color: theme.mutedForeground }]}>Problem</Text>
                 <Text style={[styles.insightText, { color: theme.text }]}>{aiInsight.problem || 'N/A'}</Text>
               </View>
               <View style={[styles.insightBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                <Text style={[styles.insightLabel, { color: theme.muted }]}>Method</Text>
+                <Text style={[styles.insightLabel, { color: theme.mutedForeground }]}>Method</Text>
                 <Text style={[styles.insightText, { color: theme.text }]}>{aiInsight.methodology || 'N/A'}</Text>
               </View>
               <View style={[styles.insightBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                <Text style={[styles.insightLabel, { color: theme.muted }]}>Result</Text>
+                <Text style={[styles.insightLabel, { color: theme.mutedForeground }]}>Result</Text>
                 <Text style={[styles.insightText, { color: theme.text }]}>{aiInsight.results || 'N/A'}</Text>
               </View>
             </View>

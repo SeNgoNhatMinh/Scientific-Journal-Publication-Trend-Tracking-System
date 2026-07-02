@@ -199,7 +199,7 @@ export default function AdminTopicsScreen() {
           <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
           <TextInput
             placeholder="Search AI topics..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mutedForeground}
             value={search}
             onChangeText={setSearch}
             style={[styles.searchInput, { color: theme.text }]}
@@ -220,7 +220,7 @@ export default function AdminTopicsScreen() {
       ) : topics.length === 0 ? (
         <View style={styles.centerContainer}>
           <Compass size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-          <Text style={[styles.emptyText, { color: theme.muted }]}>No topics found.</Text>
+          <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No topics found.</Text>
         </View>
       ) : (
         <FlatList
@@ -234,7 +234,7 @@ export default function AdminTopicsScreen() {
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>{item.name}</Text>
-                    <Text style={[styles.cardSubtitle, { color: theme.muted }]}>
+                    <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
                       Seed: {item.seedKeyword || 'None'} | Papers: {item.paperCount.toLocaleString()}
                     </Text>
                   </View>
@@ -318,10 +318,10 @@ export default function AdminTopicsScreen() {
 
             <ScrollView contentContainerStyle={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Topic Name *</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Topic Name *</Text>
                 <TextInput
                   placeholder="e.g. LLM Reasoning Techniques"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={name}
                   onChangeText={setName}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -329,10 +329,10 @@ export default function AdminTopicsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Seed Keyword</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Seed Keyword</Text>
                 <TextInput
                   placeholder="e.g. large language models"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={seedKeyword}
                   onChangeText={setSeedKeyword}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -340,10 +340,10 @@ export default function AdminTopicsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Description</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Description</Text>
                 <TextInput
                   placeholder="Describe the research topic cluster..."
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   multiline
                   numberOfLines={2}
                   value={description}
@@ -364,7 +364,7 @@ export default function AdminTopicsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Paper Count</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Paper Count</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={paperCount}
@@ -373,7 +373,7 @@ export default function AdminTopicsScreen() {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Trend Status</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Trend Status</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusSelectorRow}>
                     {Object.keys(STATUS_COLORS).map((status) => (
                       <TouchableOpacity
@@ -398,7 +398,7 @@ export default function AdminTopicsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Growth Rate</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Growth Rate</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={growthRate}
@@ -407,7 +407,7 @@ export default function AdminTopicsScreen() {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Acceleration Factor</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Acceleration Factor</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={accelerationFactor}
@@ -428,10 +428,10 @@ export default function AdminTopicsScreen() {
 
               {isEmerging ? (
                 <View style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Emergence Score (0-1)</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Emergence Score (0-1)</Text>
                   <TextInput
                     placeholder="e.g. 0.85"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     keyboardType="numeric"
                     value={emergenceScore}
                     onChangeText={setEmergenceScore}
