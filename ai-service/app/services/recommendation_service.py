@@ -96,12 +96,72 @@ def _build_recommendation_reason(user_interests: List[str], paper: Dict, semanti
     return "Recommended for topic exploration"
 
 
-def recommend_research_directions(keywords: List[str], top_n: int = 10) -> List[Dict]:
+def _to_float(value, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp(value: float, min_value: float = 0.0, max_value: float = 1.0) -> float:
+    return max(min_value, min(max_value, value))
+
+
+def _trend_context_score(trend_context: Optional[Dict]) -> float:
+    if not trend_context:
+        return 0.5
+
+    status_scores = {
+        "exploding": 0.92,
+        "growing": 0.78,
+        "stable": 0.52,
+        "declining": 0.28,
+    }
+    status_score = status_scores.get(str(trend_context.get("trendStatus", "")).lower(), 0.5)
+
+    avg_growth = _to_float(trend_context.get("averageGrowthRate"), 0.0)
+    growth_score = _clamp((avg_growth + 20.0) / 100.0)
+
+    yearly = trend_context.get("trends") or trend_context.get("yearlyData") or []
+    recent_growth = None
+    if isinstance(yearly, list) and yearly:
+        for item in reversed(yearly):
+            if isinstance(item, dict) and item.get("growthRate") is not None:
+                recent_growth = _to_float(item.get("growthRate"), None)
+                break
+    momentum_score = _clamp(((recent_growth if recent_growth is not None else avg_growth) + 20.0) / 100.0)
+
+    return _clamp((status_score * 0.45) + (growth_score * 0.35) + (momentum_score * 0.20))
+
+
+def _keyword_specificity_score(keyword: str) -> float:
+    tokens = [token for token in re.split(r"[\s/_-]+", keyword.lower()) if token]
+    if not tokens:
+        return 0.25
+
+    technical_markers = (
+        "model", "learning", "network", "transformer", "mamba", "graph", "diffusion",
+        "segmentation", "classification", "detection", "retrieval", "embedding",
+        "federated", "contrastive", "multimodal", "vision", "language",
+    )
+    marker_bonus = 0.18 if any(marker in keyword.lower() for marker in technical_markers) else 0.0
+    length_score = _clamp(len(tokens) / 5.0)
+    return _clamp(0.25 + (length_score * 0.55) + marker_bonus)
+
+
+def recommend_research_directions(
+    keywords: List[str],
+    trend_context: Optional[Dict] = None,
+    top_n: int = 10,
+) -> List[Dict]:
     cleaned = [keyword.strip() for keyword in keywords if keyword and keyword.strip()]
     if not cleaned:
         return []
 
     embeddings = embed_texts(cleaned)
+    trend_score = _trend_context_score(trend_context)
     clusters = []
     used = set()
     similarity_threshold = 0.72
@@ -131,15 +191,48 @@ def recommend_research_directions(keywords: List[str], top_n: int = 10) -> List[
             for i in cluster_indices
         ]
         representative = cluster_keywords[int(np.argmax(central_scores))]
-        growth_score = min(1.0, 0.4 + 0.15 * len(cluster_keywords))
+        cluster_size_score = _clamp(math.log1p(len(cluster_keywords)) / math.log1p(6))
+        if len(cleaned) > 1:
+            related_scores = []
+            for cluster_index in cluster_indices:
+                similarities = [
+                    float(cosine_similarity(
+                        embeddings[cluster_index].reshape(1, -1),
+                        embeddings[other_index].reshape(1, -1),
+                    )[0][0])
+                    for other_index in range(len(cleaned))
+                    if other_index != cluster_index
+                ]
+                if similarities:
+                    related_scores.append(float(np.mean(similarities)))
+            relatedness_score = _clamp(((float(np.mean(related_scores)) if related_scores else 0.0) + 1.0) / 2.0)
+        else:
+            relatedness_score = 0.45
+        specificity_score = _keyword_specificity_score(representative)
+        confidence = float(np.mean(central_scores))
+        priority = _clamp(
+            (trend_score * 0.45) +
+            (cluster_size_score * 0.15) +
+            (relatedness_score * 0.20) +
+            (specificity_score * 0.15) +
+            (confidence * 0.05),
+            0.05,
+            0.98,
+        )
 
         clusters.append(
             {
                 "direction": _format_direction_name(representative),
                 "keywords": cluster_keywords,
-                "rationale": _build_direction_rationale(cluster_keywords),
-                "confidence": round(float(np.mean(central_scores)), 4),
-                "priority": round(growth_score, 4),
+                "rationale": _build_direction_rationale(cluster_keywords, trend_context),
+                "confidence": round(confidence, 4),
+                "priority": round(priority, 4),
+                "signals": {
+                    "trend": round(trend_score, 4),
+                    "clusterSize": round(cluster_size_score, 4),
+                    "relatedness": round(relatedness_score, 4),
+                    "specificity": round(specificity_score, 4),
+                },
             }
         )
 
@@ -151,6 +244,14 @@ def _format_direction_name(keyword: str) -> str:
     return keyword[:1].upper() + keyword[1:]
 
 
-def _build_direction_rationale(keywords: List[str]) -> str:
+def _build_direction_rationale(keywords: List[str], trend_context: Optional[Dict] = None) -> str:
     keyword_text = ", ".join(sorted({keyword.lower() for keyword in keywords}))
+    if trend_context:
+        status = trend_context.get("trendStatus") or "tracked"
+        growth = trend_context.get("averageGrowthRate")
+        if growth is not None:
+            return (
+                f"Research directions around {keyword_text} are linked to a {status} trend "
+                f"with average growth near {growth}%."
+            )
     return f"Research directions around {keyword_text} show semantic convergence and practical overlap."

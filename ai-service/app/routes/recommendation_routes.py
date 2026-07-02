@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.services.recommendation_service import (
     recommend_papers as run_recommend_papers,
@@ -29,6 +29,7 @@ class RecommendationRequest(BaseModel):
 class ResearchDirectionsRequest(BaseModel):
     """Keywords for research direction recommendations"""
     keywords: List[str]
+    trendContext: Optional[Dict[str, Any]] = None
 
 @router.post("/papers")
 async def recommend_papers(request: RecommendationRequest):
@@ -57,7 +58,7 @@ async def recommend_research_directions(request: ResearchDirectionsRequest):
     Gợi ý hướng nghiên cứu triển vọng từ xu hướng từ khóa
     """
     try:
-        directions = run_recommend_research_directions(request.keywords)
+        directions = run_recommend_research_directions(request.keywords, request.trendContext)
         return {
             "success": True,
             "message": "Research direction recommendations active",
