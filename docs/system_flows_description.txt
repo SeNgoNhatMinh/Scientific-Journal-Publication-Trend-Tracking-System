@@ -1,0 +1,52 @@
+HỆ THỐNG THEO DÕI XU HƯỚNG BÀI BÁO KHOA HỌC
+Mô tả các luồng hoạt động chính của hệ thống (Định dạng Plain Text)
+
+--------------------------------------------------
+1. LUỒNG XÁC THỰC NGƯỜI DÙNG (Authentication Flow)
+--------------------------------------------------
+- Bước 1: Người dùng truy cập trang web. Nếu chưa đăng nhập, hệ thống hiển thị trang Đăng nhập hoặc Đăng ký.
+- Bước 2: Người dùng nhập Email và Mật khẩu. Frontend gửi dữ liệu lên Backend.
+- Bước 3: Backend tìm kiếm Email trong cơ sở dữ liệu MongoDB và so sánh mật khẩu (đã được băm bảo mật).
+- Bước 4: Nếu thông tin đúng, Backend tạo một thẻ khóa an toàn (JWT Token) và gửi về cho Frontend.
+- Bước 5: Frontend lưu lại Token này và chuyển người dùng vào trang Bảng điều khiển chính (Dashboard).
+
+--------------------------------------------------
+2. LUỒNG TÌM KIẾM BÀI BÁO (Paper Search Flow)
+--------------------------------------------------
+- Bước 1: Người dùng gõ từ khóa (Ví dụ: "Federated Learning", tên tác giả, hoặc DOI) vào ô tìm kiếm.
+- Bước 2: Frontend gửi từ khóa này tới API của Backend.
+- Bước 3: Backend tự động lưu lại lịch sử tìm kiếm vào cơ sở dữ liệu.
+- Bước 4: Backend đóng vai trò trung gian, kết nối và kéo dữ liệu từ các nền tảng mở như OpenAlex, Crossref, arXiv.
+- Bước 5: Backend gom chung và chuẩn hóa lại dữ liệu thô để Frontend dễ đọc.
+- Bước 6: Frontend nhận dữ liệu và hiển thị danh sách các bài báo khoa học.
+
+--------------------------------------------------
+3. LUỒNG PHÂN TÍCH XU HƯỚNG TỪ KHÓA (Trend Tracking)
+--------------------------------------------------
+- Bước 1: Người dùng chọn một từ khóa học thuật để xem độ "hot" qua các năm.
+- Bước 2: Frontend gửi lệnh yêu cầu phân tích tới Backend.
+- Bước 3: Backend gọi sang hệ thống OpenAlex để đếm số lượng bài báo xuất bản chứa từ khóa này. Ở đây Backend sẽ chạy từng truy vấn một cách tuần tự (có độ trễ nhỏ) để không bị vi phạm giới hạn tải của OpenAlex.
+- Bước 4: Backend tính toán tỷ lệ phần trăm tăng trưởng và gom nhóm lại theo từng năm.
+- Bước 5: Dữ liệu phân tích cuối cùng được gửi trả về Frontend.
+- Bước 6: Frontend sử dụng thư viện để vẽ thành biểu đồ đường, giúp người dùng dễ dàng theo dõi sự biến động của xu hướng.
+
+--------------------------------------------------
+4. LUỒNG TÓM TẮT & PHÂN TÍCH BẰNG AI (AI Insights)
+--------------------------------------------------
+- Bước 1: Trong trang chi tiết bài báo, người dùng bấm nút "Phân tích bằng AI" hoặc "Tạo tóm tắt".
+- Bước 2: Frontend gửi yêu cầu tới Backend kèm theo mã định danh (ID) của bài báo.
+- Bước 3: Backend móc thông tin bài báo từ cơ sở dữ liệu (Abstract, Keywords...).
+- Bước 4: Backend gửi thông tin này sang nền tảng AI (Ví dụ: Google Gemini) kèm câu lệnh yêu cầu tóm tắt nội dung học thuật.
+- Bước 5: AI phân tích và trả về bản tóm tắt thông minh.
+- Bước 6: Backend sẽ lưu luôn kết quả này vào dữ liệu bài báo (để lần sau ai cần xem bài này sẽ không phải gọi lại AI nữa).
+- Bước 7: Backend gửi kết quả tóm tắt cho Frontend để hiển thị cho người dùng đọc.
+
+--------------------------------------------------
+5. LUỒNG QUẢN LÝ THƯ VIỆN & WORKSPACE
+--------------------------------------------------
+- Bước 1: Người dùng quyết định lưu một bài báo hay và chọn đưa vào một Không gian làm việc (Workspace) cụ thể do họ tạo ra.
+- Bước 2: Frontend gửi ID bài báo tới Backend.
+- Bước 3: Backend kiểm tra bảo mật (thông qua Token đăng nhập) để chắc chắn người dùng đang dùng tài khoản của chính mình.
+- Bước 4: Backend kiểm tra trong cơ sở dữ liệu xem Workspace đó đã lưu bài báo này trước đó chưa (tránh trùng lặp).
+- Bước 5: Nếu hợp lệ, Backend cập nhật Workspace, gắn kết ID của bài báo vào bộ sưu tập.
+- Bước 6: Backend báo thành công và Frontend sẽ hiển thị thông báo "Đã thêm bài báo vào Workspace" lên màn hình.

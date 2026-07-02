@@ -1,0 +1,75 @@
+HỆ THỐNG THEO DÕI XU HƯỚNG BÀI BÁO KHOA HỌC
+Plaintext Sequence Diagrams (Mô tả trình tự luồng)
+
+==================================================
+1. LUỒNG XÁC THỰC NGƯỜI DÙNG (Authentication Flow)
+==================================================
+User -> Frontend: Nhập Email & Password
+Frontend -> Backend: POST /api/auth/login
+Backend -> MongoDB: Query tìm User bằng Email
+MongoDB -> Backend: Trả về thông tin User + Hashed Password
+Backend -> Backend: So sánh Hashed Password bằng thuật toán bcrypt
+[Nếu Sai mật khẩu]
+    Backend -> Frontend: Trả về lỗi 401 Unauthorized
+    Frontend -> User: Hiển thị thông báo lỗi
+[Nếu Đúng mật khẩu]
+    Backend -> Backend: Khởi tạo JWT Token
+    Backend -> Frontend: Trả về 200 OK + JWT Token + User Info
+    Frontend -> Frontend: Lưu Token vào Local Storage / Context
+    Frontend -> User: Chuyển hướng tới trang Dashboard
+
+==================================================
+2. LUỒNG TÌM KIẾM BÀI BÁO (Paper Search Flow)
+==================================================
+User -> Frontend: Nhập từ khóa tìm kiếm (VD: "Federated Learning")
+Frontend -> Backend: GET /api/papers/search?q=Federated+Learning
+Backend -> MongoDB: Lưu lịch sử tìm kiếm vào bảng SearchHistory
+Backend -> External APIs: Gọi request tìm kiếm tới OpenAlex / Crossref
+External APIs -> Backend: Trả về dữ liệu bài báo thô (JSON)
+Backend -> Backend: Chuẩn hóa dữ liệu thô thành format chuẩn của hệ thống
+Backend -> Frontend: Trả về danh sách bài báo đã chuẩn hóa
+Frontend -> User: Hiển thị danh sách kết quả lên giao diện
+
+==================================================
+3. LUỒNG PHÂN TÍCH XU HƯỚNG TỪ KHÓA (Keyword & Trend Analysis Flow)
+==================================================
+User -> Frontend: Yêu cầu xem xu hướng của từ khóa "IoT"
+Frontend -> Backend: GET /api/v1/trends/related-keywords?keyword=IoT
+Backend -> Academic API Service: Gọi hàm getRelatedKeywordsTrend()
+Academic API Service -> OpenAlex: Gửi request lấy tần suất tổng (freqResp)
+Academic API Service -> OpenAlex: Chạy vòng lặp lấy tần suất từng năm (Có delay 150ms để chống rate limit 429)
+Academic API Service -> OpenAlex: Gửi request lấy danh sách bài báo mẫu (papersResp)
+OpenAlex -> Academic API Service: Trả về toàn bộ dữ liệu thống kê
+Academic API Service -> Backend: Xử lý và tính toán tỷ lệ tăng trưởng (Growth Rate)
+Backend -> MongoDB: Lưu lại kết quả xu hướng để Caching / History
+Backend -> Frontend: Trả về mảng dữ liệu xu hướng dạng JSON
+Frontend -> Frontend: Xử lý dữ liệu và render biểu đồ bằng Recharts
+Frontend -> User: Hiển thị Biểu đồ trực quan lên màn hình
+
+==================================================
+4. LUỒNG TÓM TẮT & PHÂN TÍCH BẰNG AI (AI Insights Flow)
+==================================================
+User -> Frontend: Bấm nút "Generate AI Summary" trong trang chi tiết
+Frontend -> Backend: POST /api/ai/summarize { paperId }
+Backend -> MongoDB: Truy vấn lấy nội dung Abstract / Keywords của bài báo
+MongoDB -> Backend: Trả về thông tin chi tiết bài báo
+Backend -> Gemini AI Service: Gửi Prompt yêu cầu tóm tắt và đánh giá bài báo
+Gemini AI Service -> Backend: Trả về nội dung đã được phân tích & tóm tắt
+Backend -> MongoDB: Lưu trường "aiSummary" vào Document của bài báo
+Backend -> Frontend: Trả về nội dung AI
+Frontend -> User: Hiển thị đoạn tóm tắt AI trên giao diện
+
+==================================================
+5. LUỒNG QUẢN LÝ THƯ VIỆN & WORKSPACE
+==================================================
+User -> Frontend: Bấm nút "Lưu" để thêm bài báo vào Workspace X
+Frontend -> Backend: POST /api/workspaces/X/papers { paper_id }
+Backend -> Backend: Verify JWT Middleware để kiểm tra quyền người dùng
+Backend -> MongoDB: Truy vấn xem bài báo đã tồn tại trong Workspace X chưa
+[Nếu đã tồn tại]
+    Backend -> Frontend: Trả về lỗi 400 Bad Request (Duplicate)
+[Nếu chưa tồn tại]
+    Backend -> MongoDB: Cập nhật (Push) paper_id vào Workspace X
+    MongoDB -> Backend: Xác nhận Update thành công
+    Backend -> Frontend: Trả về 200 OK
+    Frontend -> User: Hiển thị Toast "Thêm thành công"

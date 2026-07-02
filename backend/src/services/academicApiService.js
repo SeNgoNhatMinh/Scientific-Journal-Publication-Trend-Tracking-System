@@ -73,10 +73,11 @@ const exaClient = axios.create({
   timeout: apiTimeout,
 });
 
-/** OpenAlex polite pool: https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication */
+/** OpenAlex polite pool + optional API key: https://developers.openalex.org/guides/authentication */
 const withOpenAlexParams = params => ({
   ...params,
   mailto: envConfig.OPENALEX_MAILTO,
+  ...(envConfig.OPENALEX_API_KEY ? { api_key: envConfig.OPENALEX_API_KEY } : {}),
 });
 
 const toProviderError = (source, error) => {
@@ -87,6 +88,10 @@ const toProviderError = (source, error) => {
   let message = `${source} request failed: ${error.message}`;
   if (statusCode === 401 || statusCode === 403) {
     message = `${source} rejected the request. Check that the API key is active and allowed for this endpoint.`;
+  }
+  if (statusCode === 503 && source === 'OpenAlex') {
+    message =
+      'OpenAlex search is temporarily unavailable (rate limited). Set OPENALEX_API_KEY in backend env (free at openalex.org/settings/api) or retry later.';
   }
   if (/Developer Inactive/i.test(bodyText)) {
     message = `${source} rejected the request: Developer Inactive. Activate the IEEE developer account/key before using this source.`;
@@ -924,13 +929,13 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
     });
 
     const counts = new Map();
-    for (let year = startYear; year <= currentYear; year += 1) {
+    for (let year = startYear - 1; year <= currentYear; year += 1) {
       counts.set(year, 0);
     }
 
     (response.data.group_by || []).forEach(item => {
       const year = parseInt(item.key, 10);
-      if (year >= startYear && year <= currentYear) {
+      if (year >= startYear - 1 && year <= currentYear) {
         counts.set(year, item.count || 0);
       }
     });
@@ -940,7 +945,7 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
         year,
         count,
       }))
-    );
+    ).slice(1);
 
     return { source: normalizedSource, keyword, trends };
   }
@@ -959,12 +964,12 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
     );
 
     const counts = new Map();
-    for (let year = startYear; year <= currentYear; year += 1) {
+    for (let year = startYear - 1; year <= currentYear; year += 1) {
       counts.set(year, 0);
     }
 
     (response.data.data || []).forEach(paper => {
-      if (paper.year && paper.year >= startYear && paper.year <= currentYear) {
+      if (paper.year && paper.year >= startYear - 1 && paper.year <= currentYear) {
         counts.set(paper.year, (counts.get(paper.year) || 0) + 1);
       }
     });
@@ -974,7 +979,7 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
         year,
         count,
       }))
-    );
+    ).slice(1);
 
     return { source: normalizedSource, keyword, trends };
   }
@@ -995,14 +1000,14 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
   });
 
   const counts = new Map();
-  for (let year = startYear; year <= currentYear; year += 1) {
+  for (let year = startYear - 1; year <= currentYear; year += 1) {
     counts.set(year, 0);
   }
 
   const values = response.data.message?.facets?.published?.values || [];
   values.forEach(item => {
     const year = parseInt(item.value, 10);
-    if (!Number.isNaN(year) && year >= startYear && year <= currentYear) {
+    if (!Number.isNaN(year) && year >= startYear - 1 && year <= currentYear) {
       counts.set(year, item.count || 0);
     }
   });
@@ -1012,7 +1017,7 @@ const getTrendData = async (source, keyword, startYear = 2010) => {
       year,
       count,
     }))
-  );
+  ).slice(1);
 
   return { source: normalizedSource, keyword, trends };
 };
@@ -1106,20 +1111,89 @@ const getRelatedKeywordsTrend = async (source, keyword, startYear = 2010) => {
     throw new Error(`Related keywords trend is currently only supported for OpenAlex (requested: ${normalizedSource})`);
   }
 
+  const baseFilter = `publication_year:${startYear}-${currentYear},type:article`;
+  const normalizedQuery = keyword.trim().toLowerCase();
+
+  // Keep only meaningful co-occurring keywords: drop OpenAlex's "unknown" bucket
+  // and the search term itself so it doesn't dominate its own related list.
+  const isMeaningful = (entry) => {
+    const key = String(entry.key || '');
+    const name = entry.key_display_name || '';
+    if (!name) return false;
+    if (/\/unknown$/i.test(key) || name.toLowerCase() === 'unknown') return false;
+    if (name.trim().toLowerCase() === normalizedQuery) return false;
+    return true;
+  };
+
   try {
-    // Fetch up to 100 works for trend aggregation
-    const response = await openAlexClient.get('/works', {
+    // 1) True keyword frequencies aggregated over the ENTIRE matched corpus
+    //    (group_by counts every matching work, not just a 100-paper sample).
+    const freqResp = await openAlexClient.get('/works', {
       params: withOpenAlexParams({
         search: keyword,
-        filter: `publication_year:${startYear}-${currentYear},type:article`,
+        filter: baseFilter,
+        group_by: 'keywords.id',
+        // group_by buckets are capped by per_page — request the max so we get
+        // the full ranking, not just the single top group.
+        per_page: 200,
+      }),
+    });
+
+    const totalPapers = freqResp.data.meta?.count || 0;
+    const groups = (freqResp.data.group_by || []).filter(isMeaningful);
+
+    const topKeywords = groups.slice(0, 10).map(g => ({
+      keyword: g.key_display_name,
+      // Short id form (e.g. "keywords/internet-of-things") for use in filters.
+      keyId: String(g.key).replace(/^https?:\/\/openalex\.org\//i, ''),
+      count: g.count,
+      percentage: totalPapers > 0 ? ((g.count / totalPapers) * 100).toFixed(1) : '0.0',
+    }));
+
+    // 2) True yearly co-trends: for each top keyword, count how many of the
+    //    matching papers per year also carry that keyword (whole corpus, not a sample).
+    const yearlyResults = await Promise.all(
+      topKeywords.map(async (kw) => {
+        try {
+          const resp = await openAlexClient.get('/works', {
+            params: withOpenAlexParams({
+              search: keyword,
+              filter: `${baseFilter},keywords.id:${kw.keyId}`,
+              group_by: 'publication_year',
+              // Need all year buckets (~18), not just the top one.
+              per_page: 200,
+            }),
+          });
+          const byYear = {};
+          (resp.data.group_by || []).forEach(g => {
+            const y = parseInt(g.key, 10);
+            if (!Number.isNaN(y)) byYear[y] = g.count;
+          });
+          return { keyword: kw.keyword, byYear };
+        } catch (e) {
+          return { keyword: kw.keyword, byYear: {} };
+        }
+      })
+    );
+
+    const trends = [];
+    for (let y = startYear; y <= currentYear; y++) {
+      const row = { year: y };
+      yearlyResults.forEach(r => { row[r.keyword] = r.byYear[y] || 0; });
+      trends.push(row);
+    }
+
+    // 3) Sample publications for the display list only (decoupled from the stats above).
+    const papersResp = await openAlexClient.get('/works', {
+      params: withOpenAlexParams({
+        search: keyword,
+        filter: baseFilter,
         per_page: 100,
         select: 'title,publication_year,keywords,cited_by_count',
         sort: 'cited_by_count:desc',
       }),
     });
-
-    const results = response.data.results || [];
-    const papers = results.map(work => ({
+    const papers = (papersResp.data.results || []).map(work => ({
       title: work.title || 'Untitled',
       year: work.publication_year || null,
       citationCount: work.cited_by_count || 0,
@@ -1132,10 +1206,164 @@ const getRelatedKeywordsTrend = async (source, keyword, startYear = 2010) => {
     return {
       source: normalizedSource,
       keyword,
+      totalPapers,
+      // Strip the internal keyId before returning to the controller/client.
+      topKeywords: topKeywords.map(({ keyword, count, percentage }) => ({ keyword, count, percentage })),
+      trends,
       papers,
     };
   } catch (error) {
     toProviderError('OpenAlex', error);
+  }
+};
+
+/**
+ * Map một OpenAlex work về cấu trúc metadata phục vụ phân tích Insight.
+ * Trích xuất đúng 5 đặc trưng cốt lõi theo thiết kế:
+ *  - Chủ đề lớn (Fields of Study)  → topics[].field / primary_topic
+ *  - Từ khóa chính (Keywords)      → keywords[]
+ *  - Đơn vị công tác (Affiliation) → authorships[].institutions[]
+ *  - Thời gian (Publication Date)  → publication_year
+ *  - Trích dẫn (phục vụ xếp hạng)  → cited_by_count
+ */
+const mapOpenAlexInsightWork = work => {
+  const topics = (work.topics || [])
+    .map(topic => ({
+      topic: topic.display_name || null,
+      subfield: topic.subfield?.display_name || null,
+      field: topic.field?.display_name || null,
+      domain: topic.domain?.display_name || null,
+      score: topic.score || 0,
+    }))
+    .filter(topic => topic.topic || topic.field);
+
+  const keywords = (work.keywords || [])
+    .map(keyword =>
+      typeof keyword === 'string'
+        ? keyword
+        : keyword.display_name || keyword.keyword || null
+    )
+    .filter(Boolean);
+
+  const authorships = work.authorships || [];
+
+  const authors = authorships
+    .map(authorship => ({
+      name: authorship.author?.display_name || null,
+      institutions: (authorship.institutions || [])
+        .map(institution => ({
+          name: institution.display_name || null,
+          country: institution.country_code || null,
+        }))
+        .filter(institution => institution.name),
+    }))
+    .filter(author => author.name);
+
+  const institutions = [];
+  for (const authorship of authorships) {
+    for (const institution of authorship.institutions || []) {
+      if (institution.display_name) {
+        institutions.push({
+          name: institution.display_name,
+          country: institution.country_code || null,
+        });
+      }
+    }
+  }
+
+  return {
+    id: work.id,
+    title: work.title || null,
+    publicationYear: work.publication_year || null,
+    citationCount: work.cited_by_count || 0,
+    primaryTopic: work.primary_topic?.display_name || topics[0]?.topic || null,
+    primaryField: work.primary_topic?.field?.display_name || topics[0]?.field || null,
+    topics,
+    keywords,
+    authors,
+    institutions,
+  };
+};
+
+/** Dedupe concurrent OpenAlex insight fetches (InsightsPage fires 3 requests at once). */
+const insightInFlight = new Map();
+
+/**
+ * Lấy tập dữ liệu metadata (Enriched dataset) từ OpenAlex phục vụ 3 nhóm Insight.
+ * Một lần gọi /works lấy đủ topics + keywords + institutions, có cache để tái sử dụng
+ * giữa 3 endpoint insight (top-topics, emerging-trends, top-affiliations).
+ */
+const getInsightDataset = async (source, keyword, options = {}) => {
+  const normalizedSource = normalizeSource(source);
+  if (normalizedSource !== 'openalex') {
+    const error = new Error(
+      `Insight dataset is currently only supported for OpenAlex (requested: ${normalizedSource})`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const currentYear = new Date().getFullYear();
+  const startYear = options.startYear || 2015;
+  const endYear = options.endYear || currentYear;
+  const maxPapers = Math.min(Math.max(options.maxPapers || 200, 25), 200);
+  const cleanKeyword = String(keyword || '').trim();
+
+  const cacheKey = `openalex:insight:${cleanKeyword}:${startYear}:${endYear}:${maxPapers}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached) return cached;
+
+  const inFlight = insightInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const fetchPromise = (async () => {
+    const params = withOpenAlexParams({
+      filter: `publication_year:${startYear}-${endYear},type:article|proceedings-article|posted-content`,
+      per_page: maxPapers,
+      select:
+        'id,title,publication_year,cited_by_count,authorships,topics,primary_topic,keywords',
+    });
+    if (cleanKeyword) {
+      params.search = cleanKeyword;
+    } else {
+      params.sort = 'cited_by_count:desc';
+    }
+
+    let response;
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        response = await openAlexClient.get('/works', { params });
+        break;
+      } catch (error) {
+        const status = error.response?.status;
+        const retryable = status === 429 || status === 503;
+        if (retryable && attempt < maxAttempts) {
+          await sleep(800 * attempt);
+          continue;
+        }
+        toProviderError('OpenAlex', error);
+      }
+    }
+
+    const papers = (response.data.results || []).map(mapOpenAlexInsightWork);
+    const result = {
+      source: normalizedSource,
+      keyword: cleanKeyword || null,
+      startYear,
+      endYear,
+      total: response.data.meta?.count || papers.length,
+      papers,
+    };
+    searchCache.set(cacheKey, result);
+    return result;
+  })();
+
+  insightInFlight.set(cacheKey, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    insightInFlight.delete(cacheKey);
   }
 };
 
@@ -1146,5 +1374,6 @@ module.exports = {
   getAuthorInfo,
   normalizeSource,
   getRelatedKeywordsTrend,
+  getInsightDataset,
 };
 
