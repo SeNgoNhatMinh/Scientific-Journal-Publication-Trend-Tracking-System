@@ -407,6 +407,39 @@ const addPaper = async (workspaceId, userId, { paperId, paper, tags, note, sourc
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).populate('paperId', 'title abstract publicationYear citationCount journalName doi source url keywords keywordIds');
 
+  // Trigger alert logic
+  try {
+    const WorkspaceAlert = require('../models/WorkspaceAlert');
+    const Notification = require('../models/Notification');
+    const alerts = await WorkspaceAlert.find({ workspaceId, notifyEnabled: true });
+    
+    if (alerts.length > 0) {
+      const pTitle = (paperDoc.title || '').toLowerCase();
+      const pAbstract = (paperDoc.abstract || '').toLowerCase();
+      const pKeywords = (paperDoc.keywords || []).map(k => (typeof k === 'string' ? k.toLowerCase() : ''));
+      
+      for (const alert of alerts) {
+        const keyword = alert.keyword.toLowerCase();
+        const isMatch = pTitle.includes(keyword) || 
+                        pAbstract.includes(keyword) || 
+                        pKeywords.some(k => k.includes(keyword));
+                        
+        if (isMatch && alert.createdBy.toString() !== userId.toString()) {
+          await Notification.create({
+            userId: alert.createdBy,
+            title: `Keyword Alert: ${alert.keyword}`,
+            message: `A new paper matching "${alert.keyword}" was added to your workspace.`,
+            type: 'newPaper',
+            refId: paperDoc._id,
+            refType: 'paper'
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error triggering alerts:", err);
+  }
+
   return workspacePaper;
 };
 
@@ -487,6 +520,30 @@ const createAlert = async (workspaceId, userId, { keyword, type = 'keyword', not
 const listAlerts = async (workspaceId, userId) => {
   await assertWorkspaceRole(workspaceId, userId, 'viewer');
   return WorkspaceAlert.find({ workspaceId }).sort({ createdAt: -1 });
+};
+
+const deleteAlert = async (workspaceId, userId, alertId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'editor');
+  ensureObjectId(alertId, 'alertId');
+
+  const alert = await WorkspaceAlert.findOneAndDelete({ _id: alertId, workspaceId });
+  if (!alert) throw createError('Alert not found', 404);
+
+  return { success: true, message: 'Alert deleted successfully' };
+};
+
+const updateAlert = async (workspaceId, userId, alertId, { notifyEnabled }) => {
+  await assertWorkspaceRole(workspaceId, userId, 'editor');
+  ensureObjectId(alertId, 'alertId');
+
+  const alert = await WorkspaceAlert.findOneAndUpdate(
+    { _id: alertId, workspaceId },
+    { notifyEnabled },
+    { new: true }
+  );
+  if (!alert) throw createError('Alert not found', 404);
+
+  return alert;
 };
 
 const getWorkspacePaperFilter = async workspaceId => {
@@ -737,6 +794,8 @@ module.exports = {
   listNotes,
   createAlert,
   listAlerts,
+  deleteAlert,
+  updateAlert,
   getTrends,
   getKeywordGraph,
   assertWorkspaceRole,

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
-  ArrowLeft, Plus, Loader2, Search, GitBranch, FileText, StickyNote,
-  TrendingUp, Bell, Users, Database, BellRing, BellOff, Trash2, LogOut, UserMinus
+  ArrowLeft, Plus, Loader2, Search, GitBranch, FileText,
+  TrendingUp, Bell, Users, BellRing, BellOff, Trash2, LogOut, UserMinus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import ForceGraph2D from "react-force-graph-2d"
 import api from "@/lib/api"
 import { formatText, getPaperId, unwrapPaper } from "@/lib/format"
 import { motion, AnimatePresence } from "framer-motion"
+import { Area, AreaChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, CartesianGrid } from "recharts"
 
 // API: GET  /workspaces/{id}              → { success, workspace, role, stats }
 // API: GET  /workspaces/{id}/papers       → { success, papers, ... }
@@ -51,7 +52,6 @@ export default function WorkspaceDetailsPage() {
   const [role, setRole] = useState<string>("viewer")
   const [stats, setStats] = useState<any>(null)
   const [papers, setPapers] = useState<any[]>([])
-  const [notes, setNotes] = useState<any[]>([])
   const [alerts, setAlerts] = useState<any[]>([])
   const [trends, setTrends] = useState<any>(null)
   const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] })
@@ -78,16 +78,9 @@ export default function WorkspaceDetailsPage() {
   const [paperSource, setPaperSource] = useState("openalex")
   const [paperResults, setPaperResults] = useState<any[]>([])
   const [isSearchingPapers, setIsSearchingPapers] = useState(false)
+  const [searchPage, setSearchPage] = useState(1)
   const [addingPaperId, setAddingPaperId] = useState<string | null>(null)
   const [paperError, setPaperError] = useState("")
-
-  // Notes
-  const [showNoteForm, setShowNoteForm] = useState(false)
-  const [noteTitle, setNoteTitle] = useState("")
-  const [noteContent, setNoteContent] = useState("")
-  const [noteTags, setNoteTags] = useState("")
-  const [isSavingNote, setIsSavingNote] = useState(false)
-  const [noteError, setNoteError] = useState("")
 
   // Alerts
   const [alertKeyword, setAlertKeyword] = useState("")
@@ -134,11 +127,6 @@ export default function WorkspaceDetailsPage() {
 
         const papersRes = await api.get(`/workspaces/${id}/papers`)
         setPapers(papersRes.data.papers || [])
-
-        try {
-          const notesRes = await api.get(`/workspaces/${id}/notes`)
-          setNotes(notesRes.data.notes || [])
-        } catch { /* notes may be empty */ }
 
         try {
           const alertsRes = await api.get(`/workspaces/${id}/alerts`)
@@ -223,16 +211,17 @@ export default function WorkspaceDetailsPage() {
     }
   }
 
-  const searchPapers = async (event?: React.FormEvent) => {
+  const searchPapers = async (event?: React.FormEvent, pageToFetch = 1) => {
     event?.preventDefault()
     if (!paperQuery.trim()) return
     setIsSearchingPapers(true)
     setPaperError("")
     try {
       const res = await api.get("/sources/search", {
-        params: { source: paperSource, keyword: paperQuery.trim(), limit: 6 },
+        params: { source: paperSource, keyword: paperQuery.trim(), limit: 10, page: pageToFetch },
       })
       setPaperResults(res.data.papers || [])
+      setSearchPage(pageToFetch)
     } catch (err: any) {
       setPaperError(err.response?.data?.message || "Could not search papers.")
       setPaperResults([])
@@ -283,31 +272,6 @@ export default function WorkspaceDetailsPage() {
     }
   }
 
-  const createNote = async (event?: React.FormEvent) => {
-    event?.preventDefault()
-    if (!id || !noteContent.trim()) return
-    setIsSavingNote(true)
-    setNoteError("")
-    try {
-      const tags = noteTags.split(",").map((t) => t.trim()).filter(Boolean)
-      await api.post(`/workspaces/${id}/notes`, {
-        title: noteTitle.trim() || undefined,
-        content: noteContent.trim(),
-        tags,
-      })
-      const notesRes = await api.get(`/workspaces/${id}/notes`)
-      setNotes(notesRes.data.notes || [])
-      setShowNoteForm(false)
-      setNoteTitle("")
-      setNoteContent("")
-      setNoteTags("")
-    } catch (err: any) {
-      setNoteError(err.response?.data?.message || "Could not save note.")
-    } finally {
-      setIsSavingNote(false)
-    }
-  }
-
   const createAlert = async (event?: React.FormEvent) => {
     event?.preventDefault()
     if (!id || !alertKeyword.trim()) return
@@ -327,6 +291,26 @@ export default function WorkspaceDetailsPage() {
       setAlertError(err.response?.data?.message || "Could not create alert.")
     } finally {
       setIsSavingAlert(false)
+    }
+  }
+
+  const toggleAlert = async (alertId: string, notifyEnabled: boolean) => {
+    try {
+      await api.put(`/workspaces/${id}/alerts/${alertId}`, { notifyEnabled: !notifyEnabled })
+      const alertsRes = await api.get(`/workspaces/${id}/alerts`)
+      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data.alerts || [])
+    } catch (err: any) {
+      setAlertError(err.response?.data?.message || "Could not update alert.")
+    }
+  }
+
+  const deleteAlert = async (alertId: string) => {
+    try {
+      await api.delete(`/workspaces/${id}/alerts/${alertId}`)
+      const alertsRes = await api.get(`/workspaces/${id}/alerts`)
+      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data.alerts || [])
+    } catch (err: any) {
+      setAlertError(err.response?.data?.message || "Could not delete alert.")
     }
   }
 
@@ -490,9 +474,6 @@ export default function WorkspaceDetailsPage() {
           <TabsTrigger value="members" className="rounded-lg text-sm gap-2">
             <Users className="h-3.5 w-3.5" /> Members ({members.length || stats?.membersCount || 0})
           </TabsTrigger>
-          <TabsTrigger value="notes" className="rounded-lg text-sm gap-2">
-            <StickyNote className="h-3.5 w-3.5" /> Notes ({notes.length})
-          </TabsTrigger>
           <TabsTrigger value="trends" className="rounded-lg text-sm gap-2">
             <TrendingUp className="h-3.5 w-3.5" /> Trends
           </TabsTrigger>
@@ -567,9 +548,9 @@ export default function WorkspaceDetailsPage() {
 
         {/* Papers Tab */}
         <TabsContent value="papers" className="flex-1 overflow-y-auto">
-          {canEdit && (
+          {canEdit && !showAddPaper && (
             <div className="flex justify-end mb-4">
-              <Button size="sm" className="gap-2 rounded-xl" onClick={() => setShowAddPaper((v) => !v)}>
+              <Button size="sm" className="gap-2 rounded-xl" onClick={() => setShowAddPaper(true)}>
                 <Plus className="h-4 w-4" /> Add Paper
               </Button>
             </div>
@@ -607,6 +588,9 @@ export default function WorkspaceDetailsPage() {
                   </Select>
                   <Button type="submit" disabled={isSearchingPapers || !paperQuery.trim()} className="rounded-xl">
                     {isSearchingPapers ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+                  </Button>
+                  <Button type="button" variant="ghost" className="rounded-xl" onClick={() => { setShowAddPaper(false); setPaperResults([]) }}>
+                    Cancel
                   </Button>
                 </form>
 
@@ -653,24 +637,34 @@ export default function WorkspaceDetailsPage() {
                         </Button>
                       </div>
                     ))}
+                    <div className="flex justify-between items-center mt-4">
+                      <Button size="sm" variant="outline" className="rounded-xl" disabled={searchPage <= 1} onClick={() => searchPapers(undefined, searchPage - 1)}>
+                        Previous
+                      </Button>
+                      <span className="text-xs font-medium text-muted-foreground">Page {searchPage}</span>
+                      <Button size="sm" variant="outline" className="rounded-xl" disabled={paperResults.length < 10} onClick={() => searchPapers(undefined, searchPage + 1)}>
+                        Next
+                      </Button>
+                    </div>
                   </div>
                 )}
               </motion.div>
             )}
           </AnimatePresence>
 
-          {papers.length === 0 ? (
-            <div className="text-center py-16 glass rounded-2xl border border-dashed border-border/50">
-              <FileText className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No papers in this workspace yet.</p>
-            </div>
-          ) : (
-            <motion.div
-              initial="hidden"
-              animate="show"
-              variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } }}
-              className="space-y-3"
-            >
+          {!showAddPaper && (
+            papers.length === 0 ? (
+              <div className="text-center py-16 glass rounded-2xl border border-dashed border-border/50">
+                <FileText className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No papers in this workspace yet.</p>
+              </div>
+            ) : (
+              <motion.div
+                initial="hidden"
+                animate="show"
+                variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.06 } } }}
+                className="space-y-3"
+              >
               {papers.map((p) => {
                 const wp = unwrapPaper(p)
                 return (
@@ -691,84 +685,8 @@ export default function WorkspaceDetailsPage() {
                   </motion.div>
                 )
               })}
-            </motion.div>
-          )}
-        </TabsContent>
-
-        {/* Notes Tab */}
-        <TabsContent value="notes" className="flex-1 overflow-y-auto">
-          {canEdit && (
-            <div className="flex justify-end mb-4">
-              <Button size="sm" className="gap-2 rounded-xl" onClick={() => setShowNoteForm((v) => !v)}>
-                <Plus className="h-4 w-4" /> New Note
-              </Button>
-            </div>
-          )}
-
-          <AnimatePresence>
-            {showNoteForm && (
-              <motion.form
-                onSubmit={createNote}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-5 glass rounded-2xl border border-border/40 p-4 space-y-3"
-              >
-                <Input
-                  value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
-                  className="h-10 bg-muted/30 border-border/50 rounded-xl"
-                  placeholder="Note title (optional)"
-                />
-                <textarea
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  className="w-full min-h-24 bg-muted/30 border border-border/50 rounded-xl p-3 text-sm resize-y focus-visible:outline-none focus-visible:border-primary/50"
-                  placeholder="Write your research note..."
-                  required
-                />
-                <Input
-                  value={noteTags}
-                  onChange={(e) => setNoteTags(e.target.value)}
-                  className="h-10 bg-muted/30 border-border/50 rounded-xl"
-                  placeholder="Tags, comma separated (optional)"
-                />
-                {noteError && (
-                  <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-                    {noteError}
-                  </div>
-                )}
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm" disabled={isSavingNote || !noteContent.trim()} className="rounded-xl gap-2">
-                    {isSavingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <StickyNote className="h-4 w-4" />}
-                    Save Note
-                  </Button>
-                </div>
-              </motion.form>
-            )}
-          </AnimatePresence>
-
-          {notes.length === 0 ? (
-            <div className="text-center py-16 glass rounded-2xl border border-dashed border-border/50">
-              <StickyNote className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No notes yet. Create your first research note.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {notes.map((note) => (
-                <div key={note._id} className="glass rounded-xl border border-border/40 p-4 hover:border-primary/30 transition-colors">
-                  <h4 className="font-semibold text-sm">{formatText(note.title, "Untitled note")}</h4>
-                  <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{formatText(note.content)}</p>
-                  {Array.isArray(note.tags) && note.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {note.tags.map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+              </motion.div>
+            )
           )}
         </TabsContent>
 
@@ -915,86 +833,104 @@ export default function WorkspaceDetailsPage() {
           ) : (
             <div className="space-y-6">
               {/* Premium Hero Stats */}
-              <div className="relative overflow-hidden rounded-3xl border border-border/40 p-8 flex items-center justify-between bg-gradient-to-br from-primary/10 via-background to-background">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-                <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl"></div>
-                <div className="relative z-10 flex flex-col">
-                  <span className="text-sm font-medium text-muted-foreground mb-1 uppercase tracking-wider">Analysis Scope</span>
-                  <span className="text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
-                    {trends.paperCount}
-                  </span>
-                  <span className="text-sm text-muted-foreground mt-2">papers systematically analyzed</span>
+              <div className="relative overflow-hidden rounded-3xl border border-border/20 p-10 flex items-center justify-between bg-gradient-to-r from-background via-muted/20 to-background shadow-2xl">
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] mix-blend-overlay"></div>
+                <div className="absolute -top-32 -left-32 w-64 h-64 bg-primary/20 rounded-full blur-[80px]"></div>
+                <div className="absolute -bottom-32 -right-32 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px]"></div>
+                
+                <div className="relative z-10 flex flex-col items-center md:items-start text-center md:text-left w-full">
+                  <motion.span 
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
+                    className="text-xs font-bold text-muted-foreground/80 mb-2 uppercase tracking-[0.2em]"
+                  >
+                    Analysis Scope
+                  </motion.span>
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring' }}
+                    className="flex items-baseline gap-3"
+                  >
+                    <span className="text-7xl font-black bg-clip-text text-transparent bg-gradient-to-br from-primary via-primary/80 to-primary/40 drop-shadow-sm">
+                      {trends.paperCount}
+                    </span>
+                  </motion.div>
+                  <motion.span 
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+                    className="text-sm text-muted-foreground mt-3 font-medium"
+                  >
+                    Papers systematically analyzed & synthesized
+                  </motion.span>
                 </div>
-                <TrendingUp className="h-24 w-24 text-primary/10 absolute right-8 bottom-4 -rotate-12" />
+                <TrendingUp className="hidden md:block h-32 w-32 text-primary/5 absolute right-12 top-1/2 -translate-y-1/2 -rotate-12 drop-shadow-2xl" />
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Yearly Data Chart */}
                 {Array.isArray(trends.yearlyData) && trends.yearlyData.length > 0 && (
-                  <div className="glass rounded-3xl border border-border/40 p-6 shadow-sm">
-                    <h3 className="text-base font-semibold mb-6 flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div> Publication Timeline
+                  <div className="glass rounded-3xl border border-border/40 p-6 shadow-lg relative overflow-hidden">
+                    <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
+                    <h3 className="text-base font-semibold mb-6 flex items-center gap-2 relative z-10">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div> Publication Timeline
                     </h3>
-                    <div className="space-y-3 relative">
-                      {(() => {
-                        const max = Math.max(...trends.yearlyData.map((y: any) => y.count || 0), 1)
-                        return trends.yearlyData.map((y: any, i: number) => (
-                          <motion.div
-                            key={y.year}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.1 }}
-                            className="flex items-center gap-4 group"
-                          >
-                            <span className="w-10 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">{y.year}</span>
-                            <div className="flex-1 h-8 bg-muted/20 rounded-lg overflow-hidden relative border border-border/50">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${((y.count || 0) / max) * 100}%` }}
-                                transition={{ duration: 1, ease: "easeOut" }}
-                                className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500/60 to-indigo-500/80 rounded-r-lg"
-                              />
-                            </div>
-                            <span className="w-8 text-xs font-bold text-right group-hover:text-primary transition-colors">{y.count}</span>
-                          </motion.div>
-                        ))
-                      })()}
+                    <div className="h-[260px] w-full relative z-10">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={trends.yearlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6}/>
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(150,150,150,0.1)" />
+                          <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} dx={-10} />
+                          <RechartsTooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }} 
+                            itemStyle={{ color: '#3b82f6', fontWeight: 'bold' }}
+                            labelStyle={{ color: '#aaa', marginBottom: '4px' }}
+                          />
+                          <Area type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
                 )}
 
                 {/* Top Keywords Cloud */}
                 {Array.isArray(trends.topKeywords) && trends.topKeywords.length > 0 && (
-                  <div className="glass rounded-3xl border border-border/40 p-6 shadow-sm flex flex-col">
-                    <h3 className="text-base font-semibold mb-6 flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Dominant Topics
+                  <div className="glass rounded-3xl border border-border/40 p-6 shadow-lg flex flex-col relative overflow-hidden">
+                    <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl"></div>
+                    <h3 className="text-base font-semibold mb-6 flex items-center gap-2 relative z-10">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div> Dominant Topics
                     </h3>
-                    <div className="flex flex-wrap gap-2.5 flex-1 content-start">
+                    <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-2 relative z-10">
                       {trends.topKeywords.map((kw: any, i: number) => {
                         const maxCount = Math.max(...trends.topKeywords.map((k: any) => k.paperCount), 1)
-                        const size = Math.max(0.75, Math.min(1.25, 0.75 + (kw.paperCount / maxCount) * 0.5))
+                        const percentage = (kw.paperCount / maxCount) * 100
                         const color = CATEGORY_COLORS[kw.category] || CATEGORY_COLORS.general
                         return (
                           <motion.div
                             key={kw.keywordId || kw.name}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.05 }}
+                            className="relative group"
                           >
-                            <Badge
-                              variant="outline"
-                              className="px-3 py-1.5 gap-2 transition-all hover:scale-105 cursor-default backdrop-blur-md bg-background/30"
-                              style={{ 
-                                borderColor: `${color}40`,
-                                fontSize: `${size}rem`,
-                                color: color
-                              }}
-                            >
-                              {kw.name}
-                              <span className="px-1.5 py-0.5 rounded-md bg-background/50 text-xs font-mono font-bold" style={{ color: "inherit" }}>
-                                {kw.paperCount}
-                              </span>
-                            </Badge>
+                            <div className="flex justify-between items-end mb-1.5 z-10 relative px-1">
+                              <span className="text-sm font-semibold tracking-tight group-hover:text-primary transition-colors" style={{ color: color }}>{kw.name}</span>
+                              <span className="text-xs font-bold text-muted-foreground">{kw.paperCount}</span>
+                            </div>
+                            <div className="h-2 w-full bg-muted/40 rounded-full overflow-hidden backdrop-blur-sm">
+                              <motion.div 
+                                initial={{ width: 0 }}
+                                animate={{ width: `${percentage}%` }}
+                                transition={{ duration: 1, delay: i * 0.1, type: "spring" }}
+                                className="h-full rounded-full"
+                                style={{ 
+                                  backgroundColor: color,
+                                  boxShadow: `0 0 10px ${color}80` 
+                                }}
+                              />
+                            </div>
                           </motion.div>
                         )
                       })}
@@ -1046,19 +982,42 @@ export default function WorkspaceDetailsPage() {
               {alerts.map((alert) => (
                 <div key={alert._id} className="glass rounded-xl border border-border/40 p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {alert.notifyEnabled ? (
-                      <BellRing className="h-4 w-4 text-primary" />
-                    ) : (
-                      <BellOff className="h-4 w-4 text-muted-foreground" />
-                    )}
+                    <button 
+                      onClick={() => canEdit && toggleAlert(alert._id, alert.notifyEnabled)} 
+                      className={canEdit ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}
+                      title={canEdit ? "Toggle Notification" : ""}
+                    >
+                      {alert.notifyEnabled ? (
+                        <BellRing className="h-4 w-4 text-primary" />
+                      ) : (
+                        <BellOff className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
                     <div>
                       <p className="text-sm font-medium">{alert.keyword}</p>
                       <p className="text-xs text-muted-foreground">{alert.type || "keyword"} alert</p>
                     </div>
                   </div>
-                  <Badge variant={alert.notifyEnabled ? "default" : "secondary"} className="text-[10px]">
-                    {alert.notifyEnabled ? "Active" : "Muted"}
-                  </Badge>
+                  <div className="flex items-center gap-3">
+                    <Badge 
+                      variant={alert.notifyEnabled ? "default" : "secondary"} 
+                      className={`text-[10px] ${canEdit ? 'cursor-pointer' : ''}`} 
+                      onClick={() => canEdit && toggleAlert(alert._id, alert.notifyEnabled)}
+                    >
+                      {alert.notifyEnabled ? "Active" : "Muted"}
+                    </Badge>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 opacity-50 hover:opacity-100 transition-opacity"
+                        onClick={() => deleteAlert(alert._id)}
+                        title="Delete Alert"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

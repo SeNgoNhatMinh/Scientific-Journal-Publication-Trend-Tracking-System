@@ -2,7 +2,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Search, Bell, User, BookOpen, TrendingUp, Brain, Database, Library, LayoutDashboard, X, Menu, Sun, Moon, Shield } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import api from "@/lib/api"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +60,37 @@ export default function Navbar() {
   const user = userStr ? JSON.parse(userStr) : null
   const isLoggedIn = !!token
   const isAdmin = user?.role === 'admin'
+
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const fetchUnread = async () => {
+      try {
+        const res = await api.get('/notifications/unread-count')
+        setUnreadCount(res.data.count || 0)
+      } catch (err) {}
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 60000)
+    return () => clearInterval(interval)
+  }, [isLoggedIn])
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/notifications?limit=10')
+      setNotifications(res.data.notifications || [])
+    } catch (err) {}
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      await api.patch('/notifications/read-all')
+      setNotifications(notifications.map(n => ({...n, isRead: true})))
+      setUnreadCount(0)
+    } catch (err) {}
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -146,10 +178,36 @@ export default function Navbar() {
           </Button>
           {isLoggedIn ? (
             <>
-              <Button variant="ghost" size="icon" className="relative h-8 w-8 hidden sm:flex">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
-              </Button>
+              <DropdownMenu onOpenChange={(open) => { if (open) fetchNotifications() }}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative h-8 w-8 hidden sm:flex outline-none ring-2 ring-transparent hover:ring-primary/40 transition-all rounded-full">
+                    <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-80 glass p-0" align="end">
+                  <div className="flex items-center justify-between p-3 border-b border-border/40">
+                    <span className="text-sm font-semibold">Notifications</span>
+                    {unreadCount > 0 && (
+                      <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-primary hover:text-primary/80" onClick={markAllAsRead}>
+                        Mark all as read
+                      </Button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground">No new notifications</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n._id} className={`p-3 border-b border-border/40 text-sm ${!n.isRead ? 'bg-primary/5' : ''}`}>
+                          <div className="font-semibold mb-0.5 text-[13px]">{n.title}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-2">{n.message}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger className="relative inline-flex h-8 w-8 items-center justify-center rounded-full outline-none ring-2 ring-transparent hover:ring-primary/40 transition-all">
                   <Avatar className="h-8 w-8">

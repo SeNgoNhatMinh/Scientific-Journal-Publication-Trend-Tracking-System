@@ -511,6 +511,69 @@ router.get('/:workspaceId/alerts', workspaceController.listAlerts);
 
 /**
  * @swagger
+ * /workspaces/{workspaceId}/alerts/{alertId}:
+ *   put:
+ *     tags: [Workspaces]
+ *     summary: Cập nhật trạng thái alert
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: alertId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notifyEnabled:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: OK
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+router.put('/:workspaceId/alerts/:alertId', workspaceController.updateAlert);
+
+/**
+ * @swagger
+ * /workspaces/{workspaceId}/alerts/{alertId}:
+ *   delete:
+ *     tags: [Workspaces]
+ *     summary: Xóa alert
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: alertId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+router.delete('/:workspaceId/alerts/:alertId', workspaceController.deleteAlert);
+
+/**
+ * @swagger
  * /workspaces/{workspaceId}/trends:
  *   get:
  *     tags: [Workspaces]
