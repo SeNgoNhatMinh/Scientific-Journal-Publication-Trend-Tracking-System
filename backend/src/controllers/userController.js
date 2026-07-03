@@ -45,6 +45,33 @@ const listUsers = async (req, res, next) => {
   }
 };
 
+// GET /users/search — Search users for autocomplete (publicly authenticated)
+const searchUsers = async (req, res, next) => {
+  try {
+    const { keyword = '', limit = 5 } = req.query;
+    if (!keyword.trim()) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const filter = {
+      $or: [
+        { name: { $regex: keyword, $options: 'i' } },
+        { email: { $regex: keyword, $options: 'i' } },
+      ],
+      isActive: true,
+    };
+
+    const users = await User.find(filter)
+      .select('_id name email role institution')
+      .limit(Number(limit))
+      .lean();
+
+    res.status(200).json({ success: true, data: users });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /users/:id — Get single user
 const getUser = async (req, res, next) => {
   try {
@@ -153,6 +180,7 @@ const deleteUser = async (req, res, next) => {
 
 module.exports = {
   listUsers,
+  searchUsers,
   getUser,
   updateUserRole,
   toggleUserStatus,

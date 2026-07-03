@@ -13,6 +13,7 @@ import CorpusPage from "./pages/CorpusPage"
 import LibraryPage from "./pages/LibraryPage"
 import WorkspacesPage from "./pages/WorkspacesPage"
 import WorkspaceDetailsPage from "./pages/WorkspaceDetailsPage"
+import JoinWorkspacePage from "./pages/JoinWorkspacePage"
 import ProtectedRoute from "./components/layout/ProtectedRoute"
 import AdminRoute from "./components/layout/AdminRoute"
 import ProfilePage from "./pages/ProfilePage"
@@ -48,6 +49,7 @@ function App() {
             <Route path="library" element={<LibraryPage />} />
             <Route path="workspaces" element={<WorkspacesPage />} />
             <Route path="workspaces/:id" element={<WorkspaceDetailsPage />} />
+            <Route path="workspaces/:id/join" element={<JoinWorkspacePage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Route>

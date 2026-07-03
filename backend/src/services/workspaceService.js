@@ -10,6 +10,9 @@ const Paper = require('../models/Paper');
 const Keyword = require('../models/Keyword');
 const corpusService = require('./corpusService');
 const authorKeywordService = require('./authorKeywordService');
+const jwt = require('jsonwebtoken');
+const envConfig = require('../config/env');
+const emailService = require('./emailService');
 
 const roleRank = {
   viewer: 1,
@@ -132,6 +135,7 @@ const createWorkspace = async (userId, { name, description, visibility = 'privat
     userId,
     role: 'owner',
     invitedBy: userId,
+    status: 'active',
   });
 
   return workspace;
@@ -230,13 +234,111 @@ const addMember = async (workspaceId, userId, { userId: targetUserId, email, rol
       workspaceId,
       userId: targetUser._id,
       role,
+      status: 'pending',
       invitedBy: userId,
       joinedAt: new Date(),
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).populate('userId', 'name email role institution');
 
+  // Generate join token
+  const token = jwt.sign(
+    { workspaceId: workspaceId.toString(), userId: targetUser._id.toString() },
+    envConfig.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  const joinUrl = `${envConfig.CLIENT_URL}/workspaces/${workspaceId}/join?token=${token}`;
+  
+  // Get inviter and workspace details
+  const [inviter, workspace] = await Promise.all([
+    User.findById(userId),
+    Workspace.findById(workspaceId)
+  ]);
+
+  await emailService.sendWorkspaceInvitationEmail(
+    targetUser.email,
+    inviter.name || inviter.email,
+    workspace.name,
+    joinUrl
+  );
+
   return member;
+};
+
+const joinWorkspace = async (workspaceId, userId, token) => {
+  ensureObjectId(workspaceId, 'workspaceId');
+  if (!token) throw createError('Invitation token is required', 400);
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, envConfig.JWT_SECRET);
+  } catch (err) {
+    throw createError('Invalid or expired invitation token', 400);
+  }
+
+  if (decoded.workspaceId !== workspaceId.toString() || decoded.userId !== userId.toString()) {
+    throw createError('Invalid invitation token for this user and workspace', 400);
+  }
+
+  const member = await WorkspaceMember.findOne({ workspaceId, userId });
+  if (!member) {
+    throw createError('You are not invited to this workspace', 403);
+  }
+
+  member.status = 'active';
+  await member.save();
+
+  return { success: true, message: 'Successfully joined workspace' };
+};
+
+const listMembers = async (workspaceId, userId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'viewer');
+  
+  const members = await WorkspaceMember.find({ workspaceId })
+    .populate('userId', 'name email role institution')
+    .sort({ joinedAt: -1 });
+
+  return members;
+};
+
+const removeMember = async (workspaceId, userId, targetUserId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'owner');
+  ensureObjectId(targetUserId, 'targetUserId');
+
+  if (userId.toString() === targetUserId.toString()) {
+    throw createError('You cannot kick yourself. Use leave instead.', 400);
+  }
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (workspace.owner.toString() === targetUserId.toString()) {
+    throw createError('Cannot kick the workspace owner', 400);
+  }
+
+  const member = await WorkspaceMember.findOneAndDelete({ workspaceId, userId: targetUserId });
+  if (!member) {
+    throw createError('Member not found in this workspace', 404);
+  }
+
+  return { success: true, message: 'Member removed successfully' };
+};
+
+const leaveWorkspace = async (workspaceId, userId) => {
+  ensureObjectId(workspaceId, 'workspaceId');
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (!workspace) throw createError('Workspace not found', 404);
+
+  if (workspace.owner.toString() === userId.toString()) {
+    throw createError('Owner cannot leave workspace. Delete it or transfer ownership.', 400);
+  }
+
+  const member = await WorkspaceMember.findOneAndDelete({ workspaceId, userId });
+  if (!member) {
+    throw createError('You are not a member of this workspace', 400);
+  }
+
+  return { success: true, message: 'You have left the workspace' };
 };
 
 const findOrCreatePaper = async paperInput => {
@@ -328,32 +430,7 @@ const listPapers = async (workspaceId, userId, { page = 1, limit = 20, tag } = {
   return { papers, total, page: safePage, limit: safeLimit };
 };
 
-const createCorpusRun = async (
-  workspaceId,
-  userId,
-  { seedKeyword, source, startYear, endYear, maxPages, perPage }
-) => {
-  await assertWorkspaceRole(workspaceId, userId, 'editor');
 
-  const run = await corpusService.createRun({
-    seedKeyword,
-    source,
-    startYear,
-    endYear,
-    maxPages,
-    perPage,
-    createdBy: userId,
-  });
-
-  const workspaceCorpus = await WorkspaceCorpus.create({
-    workspaceId,
-    analysisRunId: run._id,
-    seedKeyword: run.seedKeyword,
-    createdBy: userId,
-  });
-
-  return { run, workspaceCorpus };
-};
 
 const createNote = async (workspaceId, userId, { paperId, title, content, tags }) => {
   await assertWorkspaceRole(workspaceId, userId, 'editor');
@@ -650,9 +727,12 @@ module.exports = {
   listWorkspaces,
   getWorkspaceById,
   addMember,
+  joinWorkspace,
+  listMembers,
+  removeMember,
+  leaveWorkspace,
   addPaper,
   listPapers,
-  createCorpusRun,
   createNote,
   listNotes,
   createAlert,

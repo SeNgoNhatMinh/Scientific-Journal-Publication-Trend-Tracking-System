@@ -46,9 +46,45 @@ const addMember = async (req, res, next) => {
     const member = await workspaceService.addMember(req.params.workspaceId, req.user.id, req.body);
     res.status(200).json({
       success: true,
-      message: 'Workspace member saved successfully',
+      message: 'Workspace invitation sent successfully',
       member,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const joinWorkspace = async (req, res, next) => {
+  try {
+    const result = await workspaceService.joinWorkspace(req.params.workspaceId, req.user.id, req.body.token);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listMembers = async (req, res, next) => {
+  try {
+    const members = await workspaceService.listMembers(req.params.workspaceId, req.user.id);
+    res.status(200).json({ success: true, members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeMember = async (req, res, next) => {
+  try {
+    const result = await workspaceService.removeMember(req.params.workspaceId, req.user.id, req.params.userId);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const leaveWorkspace = async (req, res, next) => {
+  try {
+    const result = await workspaceService.leaveWorkspace(req.params.workspaceId, req.user.id);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -84,22 +120,7 @@ const listPapers = async (req, res, next) => {
   }
 };
 
-const createCorpusRun = async (req, res, next) => {
-  try {
-    const result = await workspaceService.createCorpusRun(
-      req.params.workspaceId,
-      req.user.id,
-      req.body
-    );
-    res.status(202).json({
-      success: true,
-      message: 'Workspace corpus ingestion started. Poll GET /corpus/runs/:id for status.',
-      ...result,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+
 
 const createNote = async (req, res, next) => {
   try {
@@ -215,9 +236,12 @@ module.exports = {
   listWorkspaces,
   getWorkspace,
   addMember,
+  joinWorkspace,
+  listMembers,
+  removeMember,
+  leaveWorkspace,
   addPaper,
   listPapers,
-  createCorpusRun,
   createNote,
   listNotes,
   createAlert,
