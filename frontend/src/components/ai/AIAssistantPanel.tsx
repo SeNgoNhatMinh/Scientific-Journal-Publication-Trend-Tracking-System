@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import api from "@/lib/api"
 import { motion, AnimatePresence } from "framer-motion"
+import ReactMarkdown from 'react-markdown'
 
 interface Message {
   role: "assistant" | "user"
@@ -14,7 +15,7 @@ interface Message {
 const initialMessages: Message[] = [
   {
     role: "assistant",
-    content: "Hi! I can summarize research abstracts or help you understand any academic paper. Paste an abstract below and I'll analyze it for you.",
+    content: "Hi! I am your AI Research Assistant. You can ask me anything about academic papers, research trends, or concepts. I will search the database and external sources to answer your questions.",
   },
 ]
 
@@ -29,7 +30,7 @@ export default function AIAssistantPanel() {
     if (isOpen) bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isOpen])
 
-  const handleSummarize = async (e: React.FormEvent) => {
+  const handleChat = async (e: React.FormEvent) => {
     e.preventDefault()
     const text = input.trim()
     if (!text) return
@@ -39,9 +40,16 @@ export default function AIAssistantPanel() {
     setIsLoading(true)
 
     try {
-      const res = await api.post("/ai/summarization/abstract", { abstract: text })
-      const summary = res.data.summary || res.data.message || "Summary generated successfully."
-      setMessages((prev) => [...prev, { role: "assistant", content: summary }])
+      const res = await api.post("/ai/chat/ask", { question: text })
+      const answer = res.data.answer || "I'm sorry, I couldn't find an answer to that."
+      const sources = res.data.sources || []
+      
+      let fullAnswer = answer;
+      if (sources.length > 0) {
+        fullAnswer += "\n\nSources:\n" + sources.map((s: any, i: number) => `[${i+1}] ${s.title || 'Untitled'}`).join("\n")
+      }
+      
+      setMessages((prev) => [...prev, { role: "assistant", content: fullAnswer }])
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -119,25 +127,40 @@ export default function AIAssistantPanel() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2 }}
-                  className={`flex items-start gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
                 >
-                  {/* Avatar */}
-                  <div className={`h-6 w-6 rounded-full shrink-0 flex items-center justify-center text-xs ${
-                    msg.role === "assistant"
-                      ? "bg-primary/10 border border-primary/20"
-                      : "bg-muted border border-border"
-                  }`}>
-                    {msg.role === "assistant" ? <Bot className="h-3.5 w-3.5 text-primary" /> : <User className="h-3.5 w-3.5 text-muted-foreground" />}
-                  </div>
-                  {/* Bubble */}
-                  <div className={`max-w-[78%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-tr-sm"
-                      : msg.error
-                        ? "bg-destructive/10 text-destructive rounded-tl-sm border border-destructive/20"
-                        : "bg-muted/60 text-foreground rounded-tl-sm border border-border/50"
-                  }`}>
-                    {msg.content}
+                  <div className={`flex items-start gap-3 w-full ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                    {/* Avatar */}
+                    <div className={`h-7 w-7 rounded-full shrink-0 flex items-center justify-center text-xs shadow-sm ${
+                      msg.role === "assistant"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted border border-border text-muted-foreground"
+                    }`}>
+                      {msg.role === "assistant" ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                    </div>
+                    {/* Bubble */}
+                    <div className={`max-w-[85%] text-[14.5px] leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-muted/50 text-foreground px-4 py-2.5 rounded-2xl rounded-tr-sm"
+                        : msg.error
+                          ? "bg-destructive/10 text-destructive px-4 py-2.5 rounded-2xl rounded-tl-sm border border-destructive/20"
+                          : "text-foreground py-1"
+                    }`}>
+                      {msg.role === "user" || msg.error ? (
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                      ) : (
+                      <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 prose-a:text-blue-500 hover:prose-a:text-blue-600 prose-strong:text-primary prose-strong:font-semibold">
+                        <ReactMarkdown
+                          components={{
+                            a: ({ node, ...props }) => (
+                              <a {...props} target="_blank" rel="noreferrer" className="no-underline hover:underline font-medium" />
+                            )
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -165,10 +188,10 @@ export default function AIAssistantPanel() {
 
             {/* Input */}
             <div className="px-4 py-3 border-t border-border/40">
-              <form onSubmit={handleSummarize} className="flex gap-2">
+              <form onSubmit={handleChat} className="flex gap-2">
                 <Input
                   id="ai-assistant-input"
-                  placeholder="Paste abstract to summarize..."
+                  placeholder="Ask anything about academic papers..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   disabled={isLoading}

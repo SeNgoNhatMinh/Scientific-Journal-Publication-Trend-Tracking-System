@@ -129,6 +129,16 @@ const extractProblem = async (req, res, next) => {
   }
 };
 
+const chatAsk = async (req, res, next) => {
+  try {
+    const payload = { ...req.body, user_id: req.user.id };
+    const result = await aiService.proxyRequest('/api/v1/chat/ask', payload);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getHealth,
   embedText,
@@ -138,4 +148,5 @@ module.exports = {
   recommendResearchDirections,
   summarizeAbstract,
   extractProblem,
+  chatAsk,
 };

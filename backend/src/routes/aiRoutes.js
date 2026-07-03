@@ -197,4 +197,33 @@ router.post('/summarization/abstract', aiController.summarizeAbstract);
  */
 router.post('/summarization/extract-problem', aiController.extractProblem);
 
+const { protect } = require('../middlewares/auth');
+
+/**
+ * @swagger
+ * /ai/chat/ask:
+ *   post:
+ *     tags: [AI Service]
+ *     security:
+ *       - bearerAuth: []
+ *     summary: Hỏi đáp với AI Assistant sử dụng RAG Agent
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [question]
+ *             properties:
+ *               question:
+ *                 type: string
+ *                 example: "What are the latest trends in quantum computing?"
+ *     responses:
+ *       200:
+ *         description: AI answer and sources
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/chat/ask', protect, aiController.chatAsk);
+
 module.exports = router;
