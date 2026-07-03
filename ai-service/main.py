@@ -32,6 +32,9 @@ app.include_router(embedding_routes.router, prefix="/api/v1/embeddings", tags=["
 app.include_router(recommendation_routes.router, prefix="/api/v1/recommendations", tags=["Recommendations"])
 app.include_router(summarization_routes.router, prefix="/api/v1/summarization", tags=["Summarization"])
 
+from app.routes import chat_routes
+app.include_router(chat_routes.router, prefix="/api/v1/chat", tags=["Chat"])
+
 _port = os.getenv("PORT", os.getenv("AI_SERVICE_PORT", "8000"))
 print(
     f"""
