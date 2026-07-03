@@ -170,6 +170,24 @@ const listAlerts = async (req, res, next) => {
   }
 };
 
+const deleteAlert = async (req, res, next) => {
+  try {
+    const result = await workspaceService.deleteAlert(req.params.workspaceId, req.user.id, req.params.alertId);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateAlert = async (req, res, next) => {
+  try {
+    const alert = await workspaceService.updateAlert(req.params.workspaceId, req.user.id, req.params.alertId, req.body);
+    res.status(200).json({ success: true, alert });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getTrends = async (req, res, next) => {
   try {
     const trends = await workspaceService.getTrends(
@@ -246,6 +264,8 @@ module.exports = {
   listNotes,
   createAlert,
   listAlerts,
+  deleteAlert,
+  updateAlert,
   getTrends,
   getKeywordGraph,
   uploadPaperPdf,
