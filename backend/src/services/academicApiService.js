@@ -1285,6 +1285,9 @@ const mapOpenAlexInsightWork = work => {
   };
 };
 
+/** Dedupe concurrent OpenAlex insight fetches (InsightsPage fires 3 requests at once). */
+const insightInFlight = new Map();
+
 /**
  * Lấy tập dữ liệu metadata (Enriched dataset) từ OpenAlex phục vụ 3 nhóm Insight.
  * Một lần gọi /works lấy đủ topics + keywords + institutions, có cache để tái sử dụng
@@ -1310,50 +1313,58 @@ const getInsightDataset = async (source, keyword, options = {}) => {
   const cached = searchCache.get(cacheKey);
   if (cached) return cached;
 
-  const params = withOpenAlexParams({
-    filter: `publication_year:${startYear}-${endYear},type:article|proceedings-article|posted-content`,
-    per_page: maxPapers,
-    select:
-      'id,title,publication_year,cited_by_count,authorships,topics,primary_topic,keywords',
-    // Dùng relevance sort (default của OpenAlex khi có search keyword) thay vì
-    // cited_by_count:desc để tránh bias về bài cũ/nổi tiếng, lấy đại diện đúng hơn.
-    // Chỉ sort by citation khi không có keyword (browse tổng quát).
-  });
-  if (cleanKeyword) {
-    params.search = cleanKeyword;
-    // Không set sort → OpenAlex mặc định relevance score (đại diện tốt nhất)
-  } else {
-    params.sort = 'cited_by_count:desc';
-  }
+  const inFlight = insightInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
 
-  let response;
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      response = await openAlexClient.get('/works', { params });
-      break;
-    } catch (error) {
-      const status = error.response?.status;
-      const retryable = status === 429 || status === 503;
-      if (retryable && attempt < maxAttempts) {
-        await sleep(800 * attempt);
-        continue;
-      }
-      toProviderError('OpenAlex', error);
+  const fetchPromise = (async () => {
+    const params = withOpenAlexParams({
+      filter: `publication_year:${startYear}-${endYear},type:article|proceedings-article|posted-content`,
+      per_page: maxPapers,
+      select:
+        'id,title,publication_year,cited_by_count,authorships,topics,primary_topic,keywords',
+    });
+    if (cleanKeyword) {
+      params.search = cleanKeyword;
+    } else {
+      params.sort = 'cited_by_count:desc';
     }
-  }
 
-  const papers = (response.data.results || []).map(mapOpenAlexInsightWork);
-  const result = {
-    source: normalizedSource,
-    keyword: cleanKeyword || null,
-    startYear,
-    endYear,
-    total: response.data.meta?.count || papers.length,
-    papers,
-  };
-  searchCache.set(cacheKey, result);
-  return result;
+    let response;
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        response = await openAlexClient.get('/works', { params });
+        break;
+      } catch (error) {
+        const status = error.response?.status;
+        const retryable = status === 429 || status === 503;
+        if (retryable && attempt < maxAttempts) {
+          await sleep(800 * attempt);
+          continue;
+        }
+        toProviderError('OpenAlex', error);
+      }
+    }
+
+    const papers = (response.data.results || []).map(mapOpenAlexInsightWork);
+    const result = {
+      source: normalizedSource,
+      keyword: cleanKeyword || null,
+      startYear,
+      endYear,
+      total: response.data.meta?.count || papers.length,
+      papers,
+    };
+    searchCache.set(cacheKey, result);
+    return result;
+  })();
+
+  insightInFlight.set(cacheKey, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    insightInFlight.delete(cacheKey);
+  }
 };
 
 module.exports = {

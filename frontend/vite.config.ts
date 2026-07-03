@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => {
           target: BACKEND_TARGET,
           changeOrigin: true,
           secure: !USE_LOCAL,
+          timeout: 120000,
+          proxyTimeout: 120000,
         },
         '/uploads': {
           target: BACKEND_TARGET,

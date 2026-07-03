@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { useColorScheme, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Search, TrendingUp, Brain, Library } from 'lucide-react-native';
+import { Home, LayoutGrid, Compass, TrendingUp, Brain } from 'lucide-react-native';
 import { Colors, Fonts } from '../../constants/theme';
 
 export default function TabLayout() {
@@ -26,9 +26,9 @@ export default function TabLayout() {
           borderTopWidth: 1,
           elevation: 10,
           shadowColor: '#000000',
-          shadowOpacity: colorScheme === 'dark' ? 0.25 : 0.08,
-          shadowOffset: { width: 0, height: -3 },
-          shadowRadius: 8,
+          shadowOpacity: colorScheme === 'dark' ? 0.3 : 0.08,
+          shadowOffset: { width: 0, height: -4 },
+          shadowRadius: 10,
           height: tabBarHeight,
           paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
@@ -52,10 +52,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="workspaces"
+        options={{
+          title: 'Workspaces',
+          tabBarIcon: ({ color, size }) => <LayoutGrid size={size || 22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="explore"
         options={{
-          title: 'Search',
-          tabBarIcon: ({ color, size }) => <Search size={size || 22} color={color} />,
+          title: 'Explore',
+          tabBarIcon: ({ color, size }) => <Compass size={size || 22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -70,13 +77,6 @@ export default function TabLayout() {
         options={{
           title: 'Insights',
           tabBarIcon: ({ color, size }) => <Brain size={size || 22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: 'Library',
-          tabBarIcon: ({ color, size }) => <Library size={size || 22} color={color} />,
         }}
       />
     </Tabs>
