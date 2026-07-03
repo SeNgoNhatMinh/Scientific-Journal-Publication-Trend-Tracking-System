@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
   ArrowLeft, Plus, Loader2, Search, GitBranch, FileText, StickyNote,
-  TrendingUp, Bell, Users, Database, BellRing, BellOff, Trash2,
+  TrendingUp, Bell, Users, Database, BellRing, BellOff, Trash2, LogOut, UserMinus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
-import ForceGraph3D from "react-force-graph-3d"
+import ForceGraph2D from "react-force-graph-2d"
 import api from "@/lib/api"
 import { formatText, getPaperId, unwrapPaper } from "@/lib/format"
 import { motion, AnimatePresence } from "framer-motion"
@@ -57,6 +57,21 @@ export default function WorkspaceDetailsPage() {
   const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] })
   const [isLoading, setIsLoading] = useState(true)
 
+  const graphContainerRef = React.useRef<HTMLDivElement>(null)
+  const [graphSize, setGraphSize] = useState({ width: 800, height: 400 })
+
+  useEffect(() => {
+    if (!graphContainerRef.current) return
+    const observer = new ResizeObserver((entries) => {
+      setGraphSize({
+        width: entries[0].contentRect.width,
+        height: entries[0].contentRect.height
+      })
+    })
+    observer.observe(graphContainerRef.current)
+    return () => observer.disconnect()
+  }, [])
+
   // Add paper
   const [showAddPaper, setShowAddPaper] = useState(false)
   const [paperQuery, setPaperQuery] = useState("")
@@ -81,23 +96,16 @@ export default function WorkspaceDetailsPage() {
   const [alertError, setAlertError] = useState("")
 
   // Members
+  const [members, setMembers] = useState<any[]>([])
   const [memberOpen, setMemberOpen] = useState(false)
   const [memberEmail, setMemberEmail] = useState("")
   const [memberRole, setMemberRole] = useState("viewer")
   const [isSavingMember, setIsSavingMember] = useState(false)
   const [memberError, setMemberError] = useState("")
   const [memberSuccess, setMemberSuccess] = useState("")
-
-  // Corpus run
-  const [corpusOpen, setCorpusOpen] = useState(false)
-  const [corpusKeyword, setCorpusKeyword] = useState("")
-  const [corpusSource, setCorpusSource] = useState("openalex")
-  const [corpusStartYear, setCorpusStartYear] = useState("2018")
-  const [corpusEndYear, setCorpusEndYear] = useState("2024")
-  const [corpusMaxPages, setCorpusMaxPages] = useState("5")
-  const [isSavingCorpus, setIsSavingCorpus] = useState(false)
-  const [corpusError, setCorpusError] = useState("")
-  const [corpusSuccess, setCorpusSuccess] = useState("")
+  const [userSuggestions, setUserSuggestions] = useState<any[]>([])
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
 
   const canEdit = roleRank[role] >= roleRank.editor
   const isOwner = role === "owner"
@@ -146,6 +154,11 @@ export default function WorkspaceDetailsPage() {
           const graphRes = await api.get(`/workspaces/${id}/keyword-graph`)
           setGraphData(buildGraph(graphRes.data))
         } catch { /* graph may be empty for new workspaces */ }
+
+        try {
+          const membersRes = await api.get(`/workspaces/${id}/members`)
+          setMembers(membersRes.data.members || [])
+        } catch { /* ignore */ }
       } catch (err) {
         console.error("Failed to load workspace", err)
       } finally {
@@ -228,6 +241,29 @@ export default function WorkspaceDetailsPage() {
     }
   }
 
+  const isPaperAdded = (paper: any) => {
+    return papers.some((p) => {
+      const wp = unwrapPaper(p)
+      if (!wp) return false
+      const matchId = paper.id
+      if (matchId) {
+        if (
+          wp.externalIds?.openalex === matchId ||
+          wp.externalIds?.semanticScholar === matchId ||
+          wp.externalIds?.crossref === matchId ||
+          wp.externalIds?.arxiv === matchId ||
+          wp.externalIds?.ieee === matchId ||
+          wp.externalIds?.exa === matchId
+        ) {
+          return true
+        }
+      }
+      if (paper.doi && wp.doi && paper.doi === wp.doi) return true
+      if (paper.title && wp.title && paper.title.toLowerCase() === wp.title.toLowerCase()) return true
+      return false
+    })
+  }
+
   const addPaperToWorkspace = async (paper: any) => {
     if (!id) return
     setAddingPaperId(paper.id || paper.url || paper.title)
@@ -240,9 +276,6 @@ export default function WorkspaceDetailsPage() {
       await loadWorkspacePapers()
       await loadWorkspaceGraph()
       refreshTrends()
-      setShowAddPaper(false)
-      setPaperResults([])
-      setPaperQuery("")
     } catch (err: any) {
       setPaperError(err.response?.data?.message || "Could not add paper to workspace.")
     } finally {
@@ -297,6 +330,24 @@ export default function WorkspaceDetailsPage() {
     }
   }
 
+  const handleUserSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setMemberEmail(val)
+    if (!val.trim() || val.length < 2) {
+      setUserSuggestions([])
+      return
+    }
+    setIsSearchingUsers(true)
+    try {
+      const res = await api.get(`/users/search?keyword=${val}`)
+      setUserSuggestions(res.data.data || [])
+    } catch {
+      setUserSuggestions([])
+    } finally {
+      setIsSearchingUsers(false)
+    }
+  }
+
   const addMember = async (event?: React.FormEvent) => {
     event?.preventDefault()
     if (!id || !memberEmail.trim()) return
@@ -308,44 +359,43 @@ export default function WorkspaceDetailsPage() {
         email: memberEmail.trim(),
         role: memberRole,
       })
-      const name = res.data?.userId?.name || res.data?.userId?.email || memberEmail.trim()
-      setMemberSuccess(`${name} added as ${memberRole}.`)
+      const name = res.data?.member?.userId?.name || memberEmail.trim()
+      setMemberSuccess(`Invitation sent to ${name}.`)
       setMemberEmail("")
-      // Refresh member count
-      try {
-        const wsRes = await api.get(`/workspaces/${id}`)
-        setStats(wsRes.data.stats || null)
-      } catch { /* ignore */ }
+      setUserSuggestions([])
+      
+      const membersRes = await api.get(`/workspaces/${id}/members`)
+      setMembers(membersRes.data.members || [])
+      const wsRes = await api.get(`/workspaces/${id}`)
+      setStats(wsRes.data.stats || null)
     } catch (err: any) {
-      setMemberError(err.response?.data?.message || "Could not add member.")
+      setMemberError(err.response?.data?.message || "Could not invite member.")
     } finally {
       setIsSavingMember(false)
     }
   }
 
-  const createCorpusRun = async (event?: React.FormEvent) => {
-    event?.preventDefault()
-    if (!id || !corpusKeyword.trim()) return
-    setIsSavingCorpus(true)
-    setCorpusError("")
-    setCorpusSuccess("")
+  const kickMember = async (userId: string) => {
+    if (!window.confirm("Are you sure you want to remove this member?")) return
     try {
-      await api.post(`/workspaces/${id}/corpus/runs`, {
-        seedKeyword: corpusKeyword.trim(),
-        source: corpusSource,
-        startYear: Number(corpusStartYear) || undefined,
-        endYear: Number(corpusEndYear) || undefined,
-        maxPages: Number(corpusMaxPages) || undefined,
-      })
-      setCorpusSuccess("Corpus run started. Papers will appear here once processed.")
-      setCorpusKeyword("")
-      loadWorkspacePapers()
-      loadWorkspaceGraph()
-      refreshTrends()
+      await api.delete(`/workspaces/${id}/members/${userId}`)
+      setMembers((prev) => prev.filter((m) => m.userId?._id !== userId))
+      const wsRes = await api.get(`/workspaces/${id}`)
+      setStats(wsRes.data.stats || null)
     } catch (err: any) {
-      setCorpusError(err.response?.data?.message || "Could not start corpus run.")
-    } finally {
-      setIsSavingCorpus(false)
+      alert(err.response?.data?.message || "Could not remove member.")
+    }
+  }
+
+  const handleLeaveWorkspace = async () => {
+    if (!window.confirm("Are you sure you want to leave this workspace?")) return
+    setIsLeaving(true)
+    try {
+      await api.delete(`/workspaces/${id}/members/me`)
+      navigate("/workspaces")
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Could not leave workspace.")
+      setIsLeaving(false)
     }
   }
 
@@ -418,151 +468,13 @@ export default function WorkspaceDetailsPage() {
               <Trash2 className="h-4 w-4" /> Delete
             </Button>
           )}
-          {canEdit && (
-            <Dialog open={corpusOpen} onOpenChange={setCorpusOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 rounded-xl">
-                  <Database className="h-4 w-4" /> Run Corpus
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="glass border-border/50 rounded-2xl">
-                <form onSubmit={createCorpusRun}>
-                  <DialogHeader>
-                    <DialogTitle>New Corpus Run</DialogTitle>
-                    <DialogDescription>
-                      Fetch and analyze papers from an academic source by keyword.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="py-4 space-y-3">
-                    <Input
-                      placeholder="Seed keyword (e.g., machine learning)"
-                      value={corpusKeyword}
-                      onChange={(e) => setCorpusKeyword(e.target.value)}
-                      required
-                      className="h-11 rounded-xl bg-muted/30 border-border/50"
-                    />
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-xs text-muted-foreground">Source</label>
-                        <Select value={corpusSource} onValueChange={(v) => setCorpusSource(v ?? "openalex")}>
-                          <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-border/50">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="openalex">OpenAlex</SelectItem>
-                            <SelectItem value="crossref">Crossref</SelectItem>
-                            <SelectItem value="semantic_scholar">Semantic Scholar</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs text-muted-foreground">Max pages</label>
-                        <Input
-                          type="number" min={1} max={20}
-                          value={corpusMaxPages}
-                          onChange={(e) => setCorpusMaxPages(e.target.value)}
-                          className="h-11 rounded-xl bg-muted/30 border-border/50"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs text-muted-foreground">Start year</label>
-                        <Input
-                          type="number"
-                          value={corpusStartYear}
-                          onChange={(e) => setCorpusStartYear(e.target.value)}
-                          className="h-11 rounded-xl bg-muted/30 border-border/50"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs text-muted-foreground">End year</label>
-                        <Input
-                          type="number"
-                          value={corpusEndYear}
-                          onChange={(e) => setCorpusEndYear(e.target.value)}
-                          className="h-11 rounded-xl bg-muted/30 border-border/50"
-                        />
-                      </div>
-                    </div>
-                    {corpusError && (
-                      <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-                        {corpusError}
-                      </div>
-                    )}
-                    {corpusSuccess && (
-                      <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-500">
-                        {corpusSuccess}
-                      </div>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={isSavingCorpus || !corpusKeyword.trim()} className="rounded-xl gap-2">
-                      {isSavingCorpus ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-                      Start Run
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+          {!isOwner && (
+            <Button variant="destructive" size="sm" className="gap-2 rounded-xl" onClick={handleLeaveWorkspace} disabled={isLeaving}>
+              {isLeaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Leave Workspace
+            </Button>
           )}
 
-          {isOwner && (
-            <Dialog open={memberOpen} onOpenChange={setMemberOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 rounded-xl">
-                  <Users className="h-4 w-4" /> Members{stats ? ` (${stats.membersCount})` : ""}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="glass border-border/50 rounded-2xl">
-                <form onSubmit={addMember}>
-                  <DialogHeader>
-                    <DialogTitle>Add / Update Member</DialogTitle>
-                    <DialogDescription>
-                      Invite a user by email and assign their role in this workspace.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="py-4 space-y-3">
-                    <Input
-                      type="email"
-                      placeholder="member@example.com"
-                      value={memberEmail}
-                      onChange={(e) => setMemberEmail(e.target.value)}
-                      required
-                      className="h-11 rounded-xl bg-muted/30 border-border/50"
-                    />
-                    <div className="space-y-1.5">
-                      <label className="text-xs text-muted-foreground">Role</label>
-                      <Select value={memberRole} onValueChange={(v) => setMemberRole(v ?? "viewer")}>
-                        <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-border/50">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="viewer">Viewer</SelectItem>
-                          <SelectItem value="editor">Editor</SelectItem>
-                          <SelectItem value="owner">Owner</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {memberError && (
-                      <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-                        {memberError}
-                      </div>
-                    )}
-                    {memberSuccess && (
-                      <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-500">
-                        {memberSuccess}
-                      </div>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit" disabled={isSavingMember || !memberEmail.trim()} className="rounded-xl gap-2">
-                      {isSavingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      Add Member
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          )}
+
         </div>
       </div>
 
@@ -575,6 +487,9 @@ export default function WorkspaceDetailsPage() {
           <TabsTrigger value="papers" className="rounded-lg text-sm gap-2">
             <FileText className="h-3.5 w-3.5" /> Papers ({papers.length})
           </TabsTrigger>
+          <TabsTrigger value="members" className="rounded-lg text-sm gap-2">
+            <Users className="h-3.5 w-3.5" /> Members ({members.length || stats?.membersCount || 0})
+          </TabsTrigger>
           <TabsTrigger value="notes" className="rounded-lg text-sm gap-2">
             <StickyNote className="h-3.5 w-3.5" /> Notes ({notes.length})
           </TabsTrigger>
@@ -586,21 +501,60 @@ export default function WorkspaceDetailsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* 3D Graph Tab */}
+        {/* Keyword Graph Tab */}
         <TabsContent value="dashboard" className="flex-1 flex flex-col rounded-2xl overflow-hidden border border-border/40 bg-background/50 relative">
           <div className="absolute top-4 left-4 z-10 glass rounded-xl px-4 py-2.5 border border-border/40 pointer-events-none">
             <h3 className="text-xs font-semibold">Mini Research Map</h3>
-            <p className="text-xs text-muted-foreground">3D keyword graph of your workspace</p>
+            <p className="text-xs text-muted-foreground">Keyword connections of your workspace</p>
           </div>
-          <div className="flex-1 cursor-move">
+          <div className="flex-1 cursor-move" ref={graphContainerRef}>
             {graphData.nodes.length > 0 ? (
-              <ForceGraph3D
+              <ForceGraph2D
                 graphData={graphData}
-                nodeLabel={(node: any) => `${node.label || node.id} (${node.category || "unknown"})`}
+                width={graphSize.width}
+                height={graphSize.height}
+                nodeLabel={(node: any) => `${node.label || node.id} (${node.paperCount || node.val} papers)`}
                 nodeColor={(node: any) => node.color}
                 nodeVal={(node: any) => node.val}
                 backgroundColor="#00000000"
                 linkDirectionalParticles={1}
+                linkColor={() => "rgba(100, 100, 100, 0.2)"}
+                nodeCanvasObject={(node: any, ctx, globalScale) => {
+                  const label = node.label || node.id;
+                  const fontSize = 12 / globalScale;
+                  ctx.font = `${fontSize}px Inter, sans-serif`;
+                  const textWidth = ctx.measureText(label).width;
+                  const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.4);
+
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                  if (document.documentElement.classList.contains('dark')) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                  }
+                  
+                  ctx.beginPath();
+                  ctx.roundRect(
+                    node.x - bckgDimensions[0] / 2, 
+                    node.y - bckgDimensions[1] / 2, 
+                    bckgDimensions[0], 
+                    bckgDimensions[1],
+                    4 / globalScale
+                  );
+                  ctx.fill();
+
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillStyle = node.color || "#6b7280";
+                  ctx.fillText(label, node.x, node.y);
+
+                  node.__bckgDimensions = bckgDimensions;
+                }}
+                nodePointerAreaPaint={(node: any, color, ctx) => {
+                  ctx.fillStyle = color;
+                  const bckgDimensions = node.__bckgDimensions;
+                  if (bckgDimensions) {
+                    ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
+                  }
+                }}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
@@ -685,14 +639,17 @@ export default function WorkspaceDetailsPage() {
                           size="sm"
                           className="shrink-0 rounded-lg gap-1.5"
                           onClick={() => addPaperToWorkspace(paper)}
-                          disabled={addingPaperId === (paper.id || paper.url || paper.title)}
+                          disabled={addingPaperId === (paper.id || paper.url || paper.title) || isPaperAdded(paper)}
+                          variant={isPaperAdded(paper) ? "secondary" : "default"}
                         >
                           {addingPaperId === (paper.id || paper.url || paper.title) ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : isPaperAdded(paper) ? (
+                            <FileText className="h-3.5 w-3.5" />
                           ) : (
                             <Plus className="h-3.5 w-3.5" />
                           )}
-                          Add
+                          {isPaperAdded(paper) ? "Added" : "Add"}
                         </Button>
                       </div>
                     ))}
@@ -815,6 +772,139 @@ export default function WorkspaceDetailsPage() {
           )}
         </TabsContent>
 
+        {/* Members Tab */}
+        <TabsContent value="members" className="flex-1 overflow-y-auto">
+          {isOwner && (
+            <div className="flex justify-end mb-4">
+              <Dialog open={memberOpen} onOpenChange={setMemberOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-2 rounded-xl">
+                    <Plus className="h-4 w-4" /> Add Member
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="glass border-border/50 rounded-2xl">
+                  <form onSubmit={addMember}>
+                    <DialogHeader>
+                      <DialogTitle>Add / Update Member</DialogTitle>
+                      <DialogDescription>
+                        Invite a user by email and assign their role in this workspace.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-3">
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          placeholder="Search by name or email..."
+                          value={memberEmail}
+                          onChange={handleUserSearch}
+                          required
+                          className="h-11 rounded-xl bg-muted/30 border-border/50"
+                        />
+                        {isSearchingUsers && <Loader2 className="absolute right-3 top-3 h-5 w-5 animate-spin text-muted-foreground" />}
+                        {userSuggestions.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-background border border-border/50 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                            {userSuggestions.map((u) => {
+                              const alreadyIn = members.some(m => m.userId?.email === u.email)
+                              if (alreadyIn) return null
+                              return (
+                                <button
+                                  key={u._id}
+                                  type="button"
+                                  className="w-full text-left px-4 py-2 hover:bg-muted/50 text-sm flex flex-col"
+                                  onClick={() => {
+                                    setMemberEmail(u.email)
+                                    setUserSuggestions([])
+                                  }}
+                                >
+                                  <span className="font-medium">{u.name}</span>
+                                  <span className="text-xs text-muted-foreground">{u.email}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-muted-foreground">Role</label>
+                        <Select value={memberRole} onValueChange={(v) => setMemberRole(v ?? "viewer")}>
+                          <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="viewer">Viewer</SelectItem>
+                            <SelectItem value="editor">Editor</SelectItem>
+                            <SelectItem value="owner">Owner</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {memberError && (
+                        <div className="rounded-xl bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+                          {memberError}
+                        </div>
+                      )}
+                      {memberSuccess && (
+                        <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-500">
+                          {memberSuccess}
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter className="flex-col items-end">
+                      {members.some(m => m.userId?.email?.toLowerCase() === memberEmail.trim().toLowerCase()) && (
+                        <span className="text-xs text-amber-500 mb-2 w-full text-right">
+                          This user is already a member.
+                        </span>
+                      )}
+                      <Button 
+                        type="submit" 
+                        disabled={
+                          isSavingMember || 
+                          !memberEmail.trim() || 
+                          members.some(m => m.userId?.email?.toLowerCase() === memberEmail.trim().toLowerCase())
+                        } 
+                        className="rounded-xl gap-2"
+                      >
+                        {isSavingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                        Add Member
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {members.map((member) => (
+              <div key={member._id} className="glass rounded-2xl border border-border/40 p-5 flex items-center justify-between group">
+                <div className="flex flex-col">
+                  <span className="font-semibold text-sm">{member.userId?.name || "Unknown"}</span>
+                  <span className="text-xs text-muted-foreground">{member.userId?.email}</span>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline" className="text-[10px] uppercase">
+                      {member.role}
+                    </Badge>
+                    {member.status === "pending" && (
+                      <Badge variant="secondary" className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/20">
+                        Pending
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                {isOwner && member.role !== "owner" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => kickMember(member.userId?._id)}
+                    title="Remove Member"
+                  >
+                    <UserMinus className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </TabsContent>
+
         {/* Trends Tab */}
         <TabsContent value="trends" className="flex-1 overflow-y-auto">
           {!trends || (trends.paperCount || 0) === 0 ? (
@@ -823,55 +913,95 @@ export default function WorkspaceDetailsPage() {
               <p className="text-sm text-muted-foreground">No trend data yet. Add papers to compute workspace trends.</p>
             </div>
           ) : (
-            <div className="space-y-5">
-              <div className="glass rounded-2xl border border-border/40 p-5">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{trends.paperCount}</span>
-                  <span className="text-sm text-muted-foreground">papers analyzed</span>
+            <div className="space-y-6">
+              {/* Premium Hero Stats */}
+              <div className="relative overflow-hidden rounded-3xl border border-border/40 p-8 flex items-center justify-between bg-gradient-to-br from-primary/10 via-background to-background">
+                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl"></div>
+                <div className="relative z-10 flex flex-col">
+                  <span className="text-sm font-medium text-muted-foreground mb-1 uppercase tracking-wider">Analysis Scope</span>
+                  <span className="text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+                    {trends.paperCount}
+                  </span>
+                  <span className="text-sm text-muted-foreground mt-2">papers systematically analyzed</span>
                 </div>
+                <TrendingUp className="h-24 w-24 text-primary/10 absolute right-8 bottom-4 -rotate-12" />
               </div>
 
-              {Array.isArray(trends.yearlyData) && trends.yearlyData.length > 0 && (
-                <div className="glass rounded-2xl border border-border/40 p-5">
-                  <h3 className="text-sm font-semibold mb-3">Papers by year</h3>
-                  <div className="space-y-2">
-                    {(() => {
-                      const max = Math.max(...trends.yearlyData.map((y: any) => y.count || 0), 1)
-                      return trends.yearlyData.map((y: any) => (
-                        <div key={y.year} className="flex items-center gap-3">
-                          <span className="w-12 text-xs text-muted-foreground shrink-0">{y.year}</span>
-                          <div className="flex-1 h-5 bg-muted/30 rounded-md overflow-hidden">
-                            <div
-                              className="h-full bg-primary/60 rounded-md"
-                              style={{ width: `${((y.count || 0) / max) * 100}%` }}
-                            />
-                          </div>
-                          <span className="w-8 text-xs text-right">{y.count}</span>
-                        </div>
-                      ))
-                    })()}
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Yearly Data Chart */}
+                {Array.isArray(trends.yearlyData) && trends.yearlyData.length > 0 && (
+                  <div className="glass rounded-3xl border border-border/40 p-6 shadow-sm">
+                    <h3 className="text-base font-semibold mb-6 flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div> Publication Timeline
+                    </h3>
+                    <div className="space-y-3 relative">
+                      {(() => {
+                        const max = Math.max(...trends.yearlyData.map((y: any) => y.count || 0), 1)
+                        return trends.yearlyData.map((y: any, i: number) => (
+                          <motion.div
+                            key={y.year}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="flex items-center gap-4 group"
+                          >
+                            <span className="w-10 text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">{y.year}</span>
+                            <div className="flex-1 h-8 bg-muted/20 rounded-lg overflow-hidden relative border border-border/50">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${((y.count || 0) / max) * 100}%` }}
+                                transition={{ duration: 1, ease: "easeOut" }}
+                                className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500/60 to-indigo-500/80 rounded-r-lg"
+                              />
+                            </div>
+                            <span className="w-8 text-xs font-bold text-right group-hover:text-primary transition-colors">{y.count}</span>
+                          </motion.div>
+                        ))
+                      })()}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {Array.isArray(trends.topKeywords) && trends.topKeywords.length > 0 && (
-                <div className="glass rounded-2xl border border-border/40 p-5">
-                  <h3 className="text-sm font-semibold mb-3">Top keywords</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {trends.topKeywords.map((kw: any) => (
-                      <Badge
-                        key={kw.keywordId || kw.name}
-                        variant="outline"
-                        className="gap-1.5"
-                        style={{ borderColor: (CATEGORY_COLORS[kw.category] || CATEGORY_COLORS.general) + "66" }}
-                      >
-                        {kw.name}
-                        <span className="text-muted-foreground">{kw.paperCount}</span>
-                      </Badge>
-                    ))}
+                {/* Top Keywords Cloud */}
+                {Array.isArray(trends.topKeywords) && trends.topKeywords.length > 0 && (
+                  <div className="glass rounded-3xl border border-border/40 p-6 shadow-sm flex flex-col">
+                    <h3 className="text-base font-semibold mb-6 flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Dominant Topics
+                    </h3>
+                    <div className="flex flex-wrap gap-2.5 flex-1 content-start">
+                      {trends.topKeywords.map((kw: any, i: number) => {
+                        const maxCount = Math.max(...trends.topKeywords.map((k: any) => k.paperCount), 1)
+                        const size = Math.max(0.75, Math.min(1.25, 0.75 + (kw.paperCount / maxCount) * 0.5))
+                        const color = CATEGORY_COLORS[kw.category] || CATEGORY_COLORS.general
+                        return (
+                          <motion.div
+                            key={kw.keywordId || kw.name}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: i * 0.05 }}
+                          >
+                            <Badge
+                              variant="outline"
+                              className="px-3 py-1.5 gap-2 transition-all hover:scale-105 cursor-default backdrop-blur-md bg-background/30"
+                              style={{ 
+                                borderColor: `${color}40`,
+                                fontSize: `${size}rem`,
+                                color: color
+                              }}
+                            >
+                              {kw.name}
+                              <span className="px-1.5 py-0.5 rounded-md bg-background/50 text-xs font-mono font-bold" style={{ color: "inherit" }}>
+                                {kw.paperCount}
+                              </span>
+                            </Badge>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
         </TabsContent>

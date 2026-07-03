@@ -162,6 +162,106 @@ router.post('/:workspaceId/members', workspaceController.addMember);
 
 /**
  * @swagger
+ * /workspaces/{workspaceId}/members:
+ *   get:
+ *     tags: [Workspaces]
+ *     summary: Lấy danh sách thành viên workspace
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/:workspaceId/members', workspaceController.listMembers);
+
+/**
+ * @swagger
+ * /workspaces/{workspaceId}/members/me:
+ *   delete:
+ *     tags: [Workspaces]
+ *     summary: Rời khỏi workspace
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete('/:workspaceId/members/me', workspaceController.leaveWorkspace);
+
+/**
+ * @swagger
+ * /workspaces/{workspaceId}/members/{userId}:
+ *   delete:
+ *     tags: [Workspaces]
+ *     summary: Xóa thành viên khỏi workspace (Chỉ owner)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Chỉ owner mới được xóa
+ */
+router.delete('/:workspaceId/members/:userId', workspaceController.removeMember);
+
+/**
+ * @swagger
+ * /workspaces/{workspaceId}/join:
+ *   post:
+ *     tags: [Workspaces]
+ *     summary: Chấp nhận lời mời tham gia workspace
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token]
+ *             properties:
+ *               token:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OK
+ *       400:
+ *         description: Lỗi token
+ */
+router.post('/:workspaceId/join', workspaceController.joinWorkspace);
+
+/**
+ * @swagger
  * /workspaces/{workspaceId}/papers:
  *   post:
  *     tags: [Workspaces]
@@ -278,54 +378,7 @@ router.post(
   workspaceController.uploadPaperPdf
 );
 
-/**
- * @swagger
- * /workspaces/{workspaceId}/corpus/runs:
- *   post:
- *     tags: [Workspaces]
- *     summary: Tạo corpus run trong workspace
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: workspaceId
- *         required: true
- *         schema: { type: string }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [seedKeyword]
- *             properties:
- *               seedKeyword:
- *                 type: string
- *                 example: machine learning
- *               source:
- *                 type: string
- *                 example: openalex
- *               startYear:
- *                 type: integer
- *                 example: 2018
- *               endYear:
- *                 type: integer
- *                 example: 2024
- *               maxPages:
- *                 type: integer
- *                 example: 5
- *               perPage:
- *                 type: integer
- *                 example: 50
- *     responses:
- *       200:
- *         description: OK
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Cần quyền editor
- */
-router.post('/:workspaceId/corpus/runs', workspaceController.createCorpusRun);
+
 
 /**
  * @swagger

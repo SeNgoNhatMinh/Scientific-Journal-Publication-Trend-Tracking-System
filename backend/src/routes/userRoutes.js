@@ -5,8 +5,13 @@ const authorize = require('../middlewares/role');
 
 const router = express.Router();
 
-// All routes require authentication + admin role
+// All routes require authentication
 router.use(protect);
+
+// Search users (available to all authenticated users)
+router.get('/search', userController.searchUsers);
+
+// All routes below require admin role
 router.use(authorize(['admin']));
 
 /**

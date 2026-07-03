@@ -621,7 +621,7 @@ export default function TrendsPage() {
               </h2>
               <p className="text-xs text-muted-foreground mb-4">Topics from corpus with exploding or growing status.</p>
               {trendingTopics.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No trending topics yet. Run a corpus analysis first.</p>
+                <p className="text-xs text-muted-foreground italic">No trending topics yet. Add papers to compute trends.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {trendingTopics.map((topic, i) => {
@@ -900,7 +900,7 @@ export default function TrendsPage() {
               </h2>
               <p className="text-xs text-muted-foreground mb-4">Topics from corpus with exploding or growing status.</p>
               {trendingTopics.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No trending topics yet. Run a corpus analysis first.</p>
+                <p className="text-xs text-muted-foreground italic">No trending topics yet. Add papers to compute trends.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {trendingTopics.map((topic, i) => {
