@@ -20,7 +20,7 @@ const RAILWAY_URL = 'https://scientific-journal-publication-trend-tracking-sy-pr
 
 // Dev mặc định dùng backend local. Đặt EXPO_PUBLIC_USE_LOCAL_BACKEND=false trong .env
 // hoặc đặt FORCE_PRODUCTION = true ở trên nếu muốn kết nối Railway.
-const USE_LOCAL = !FORCE_PRODUCTION && process.env.EXPO_PUBLIC_USE_LOCAL_BACKEND !== 'false';
+const USE_LOCAL = !FORCE_PRODUCTION && process.env.EXPO_PUBLIC_USE_LOCAL_BACKEND !== 'true';
 
 const getLocalBackendTarget = () => {
   if (process.env.EXPO_PUBLIC_BACKEND_URL) {

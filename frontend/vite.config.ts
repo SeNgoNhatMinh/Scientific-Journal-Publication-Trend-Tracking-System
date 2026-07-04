@@ -41,6 +41,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: !USE_LOCAL,
         },
+        '/socket.io': {
+          target: BACKEND_TARGET,
+          ws: true,
+          changeOrigin: true,
+          secure: !USE_LOCAL,
+        },
       },
     },
   }

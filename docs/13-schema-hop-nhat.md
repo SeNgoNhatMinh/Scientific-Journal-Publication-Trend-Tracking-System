@@ -136,7 +136,7 @@ TTL index ~180 ngày trên `startedAt`.
 | isRead | Boolean default false |
 | sentAt | Date |
 
-API: `GET /api/v1/notifications`, `GET .../unread-count`, `PATCH .../:id/read`, `PATCH .../read-all`.
+API: `GET /api/v1/notifications`, `GET .../unread-count`, `PATCH .../:id/read`, `PATCH .../read-all`, `DELETE .../:id`.
 
 Hook: sau corpus `completed` → `syncComplete`; nếu `isEmerging` → `trendingKeyword` cho user `trackedRuns` / `follows`.
 

@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   confirmText?: string
   cancelText?: string
   variant?: "default" | "destructive"
+  hideCancel?: boolean
 }
 
 export function ConfirmDialog({
@@ -20,7 +21,8 @@ export function ConfirmDialog({
   description,
   confirmText = "Confirm",
   cancelText = "Cancel",
-  variant = "default"
+  variant = "default",
+  hideCancel = false
 }: ConfirmDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -32,9 +34,11 @@ export function ConfirmDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="mt-4 flex gap-2 justify-end">
-          <Button variant="outline" onClick={onClose} className="rounded-xl h-9">
-            {cancelText}
-          </Button>
+          {!hideCancel && (
+            <Button variant="outline" onClick={onClose} className="rounded-xl h-9">
+              {cancelText}
+            </Button>
+          )}
           <Button
             variant={variant === "destructive" ? "destructive" : "default"}
             onClick={() => {

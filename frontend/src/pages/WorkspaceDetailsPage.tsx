@@ -20,6 +20,7 @@ import api from "@/lib/api"
 import { formatText, getPaperId, unwrapPaper } from "@/lib/format"
 import { motion, AnimatePresence } from "framer-motion"
 import { Area, AreaChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis, CartesianGrid } from "recharts"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 // API: GET  /workspaces/{id}              → { success, workspace, role, stats }
 // API: GET  /workspaces/{id}/papers       → { success, papers, ... }
@@ -57,20 +58,79 @@ export default function WorkspaceDetailsPage() {
   const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] })
   const [isLoading, setIsLoading] = useState(true)
 
-  const graphContainerRef = React.useRef<HTMLDivElement>(null)
+  const [graphContainer, setGraphContainer] = useState<HTMLDivElement | null>(null)
+
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+    variant?: "default" | "destructive"
+    hideCancel?: boolean
+  }>({
+    isOpen: false,
+    title: "",
+    description: "",
+    onConfirm: () => {}
+  })
+
+  const showAlert = (message: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: "Notice",
+      description: message,
+      onConfirm: () => {},
+      hideCancel: true
+    })
+  }
+  const fgRef = React.useRef<any>(null)
   const [graphSize, setGraphSize] = useState({ width: 800, height: 400 })
 
   useEffect(() => {
-    if (!graphContainerRef.current) return
-    const observer = new ResizeObserver((entries) => {
-      setGraphSize({
-        width: entries[0].contentRect.width,
-        height: entries[0].contentRect.height
-      })
+    if (!graphContainer) return;
+    
+    const updateSize = () => {
+      const { offsetWidth, offsetHeight } = graphContainer
+      if (offsetWidth > 0 && offsetHeight > 0) {
+        setGraphSize({ width: offsetWidth, height: offsetHeight })
+      }
+    }
+    
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    
+    const observer = new ResizeObserver(() => {
+      updateSize()
     })
-    observer.observe(graphContainerRef.current)
-    return () => observer.disconnect()
-  }, [])
+    
+    observer.observe(graphContainer)
+    
+    const timeout = setTimeout(updateSize, 100)
+    
+    return () => {
+      window.removeEventListener('resize', updateSize)
+      observer.disconnect()
+      clearTimeout(timeout)
+    }
+  }, [graphContainer])
+
+  useEffect(() => {
+    if (fgRef.current) {
+      // Increase negative charge to push nodes apart strongly and prevent overlapping
+      const chargeForce = fgRef.current.d3Force('charge')
+      if (chargeForce) {
+        chargeForce.strength(-2500)
+        chargeForce.distanceMax(2000)
+      }
+      
+      const linkForce = fgRef.current.d3Force('link')
+      if (linkForce) {
+        linkForce.distance(150)
+      }
+
+      fgRef.current.d3ReheatSimulation()
+    }
+  }, [graphData])
 
   // Add paper
   const [showAddPaper, setShowAddPaper] = useState(false)
@@ -103,17 +163,47 @@ export default function WorkspaceDetailsPage() {
   const canEdit = roleRank[role] >= roleRank.editor
   const isOwner = role === "owner"
 
-  const buildGraph = (data: any) => {
-    const nodes = (data.nodes || []).map((n: any) => ({
-      ...n,
-      val: n.paperCount || 1,
-      color: CATEGORY_COLORS[n.category] || CATEGORY_COLORS.general,
-    }))
-    const links = (data.edges || []).map((e: any) => ({
-      source: e.source,
-      target: e.target,
-      value: e.weight || 1,
-    }))
+  const buildGraph = (data: any, wsName: string) => {
+    const rawNodes = data.nodes || []
+    if (rawNodes.length === 0) return { nodes: [], links: [] }
+
+    const nodes: any[] = []
+    const links: any[] = []
+
+    const rootId = "root_workspace"
+    nodes.push({
+      id: rootId,
+      label: wsName || "Workspace",
+      type: "root",
+      val: 5,
+      color: "#334155",
+    })
+
+    const categories = Array.from(new Set(rawNodes.map((n: any) => n.category || "general")))
+    categories.forEach((cat: any) => {
+      const catId = `cat_${cat}`
+      nodes.push({
+        id: catId,
+        label: (cat as string).charAt(0).toUpperCase() + (cat as string).slice(1),
+        type: "category",
+        category: cat,
+        val: 3,
+        color: CATEGORY_COLORS[cat as string] || CATEGORY_COLORS.general,
+      })
+      links.push({ source: rootId, target: catId, value: 2 })
+    })
+
+    rawNodes.forEach((n: any) => {
+      const catId = `cat_${n.category || "general"}`
+      nodes.push({
+        ...n,
+        type: "keyword",
+        val: n.paperCount || 1,
+        color: CATEGORY_COLORS[n.category] || CATEGORY_COLORS.general,
+      })
+      links.push({ source: catId, target: n.id, value: 1 })
+    })
+
     return { nodes, links }
   }
 
@@ -140,7 +230,8 @@ export default function WorkspaceDetailsPage() {
 
         try {
           const graphRes = await api.get(`/workspaces/${id}/keyword-graph`)
-          setGraphData(buildGraph(graphRes.data))
+          const wsDataLocal = wsRes.data.workspace || wsRes.data;
+          setGraphData(buildGraph(graphRes.data, wsDataLocal.name))
         } catch { /* graph may be empty for new workspaces */ }
 
         try {
@@ -163,7 +254,7 @@ export default function WorkspaceDetailsPage() {
 
   const loadWorkspaceGraph = async () => {
     const graphRes = await api.get(`/workspaces/${id}/keyword-graph`)
-    setGraphData(buildGraph(graphRes.data))
+    setGraphData(buildGraph(graphRes.data, workspace?.name || "Workspace"))
   }
 
   const refreshTrends = async () => {
@@ -272,6 +363,26 @@ export default function WorkspaceDetailsPage() {
     }
   }
 
+  const removeWorkspacePaper = async (paperId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!id) return
+    setConfirmState({
+      isOpen: true,
+      title: "Remove Paper",
+      description: "Are you sure you want to remove this paper from the workspace?",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/workspaces/${id}/papers/${paperId}`)
+          setPapers(prev => prev.filter(p => p.paper?._id !== paperId && p._id !== paperId && getPaperId(p) !== paperId))
+          await loadWorkspaceGraph()
+          refreshTrends()
+        } catch (err: any) {
+          showAlert("Failed to remove paper: " + (err.response?.data?.message || err.message))
+        }
+      }
+    })
+  }
   const createAlert = async (event?: React.FormEvent) => {
     event?.preventDefault()
     if (!id || !alertKeyword.trim()) return
@@ -305,13 +416,21 @@ export default function WorkspaceDetailsPage() {
   }
 
   const deleteAlert = async (alertId: string) => {
-    try {
-      await api.delete(`/workspaces/${id}/alerts/${alertId}`)
-      const alertsRes = await api.get(`/workspaces/${id}/alerts`)
-      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data.alerts || [])
-    } catch (err: any) {
-      setAlertError(err.response?.data?.message || "Could not delete alert.")
-    }
+    setConfirmState({
+      isOpen: true,
+      title: "Delete Alert",
+      description: "Are you sure you want to delete this alert?",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/workspaces/${id}/alerts/${alertId}`)
+          const alertsRes = await api.get(`/workspaces/${id}/alerts`)
+          setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data.alerts || [])
+        } catch (err: any) {
+          showAlert(err.response?.data?.message || "Could not delete alert.")
+        }
+      }
+    })
   }
 
   const handleUserSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -360,37 +479,58 @@ export default function WorkspaceDetailsPage() {
   }
 
   const kickMember = async (userId: string) => {
-    if (!window.confirm("Are you sure you want to remove this member?")) return
-    try {
-      await api.delete(`/workspaces/${id}/members/${userId}`)
-      setMembers((prev) => prev.filter((m) => m.userId?._id !== userId))
-      const wsRes = await api.get(`/workspaces/${id}`)
-      setStats(wsRes.data.stats || null)
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Could not remove member.")
-    }
+    setConfirmState({
+      isOpen: true,
+      title: "Remove Member",
+      description: "Are you sure you want to remove this member?",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/workspaces/${id}/members/${userId}`)
+          setMembers((prev) => prev.filter((m) => m.userId?._id !== userId))
+          const wsRes = await api.get(`/workspaces/${id}`)
+          setStats(wsRes.data.stats || null)
+        } catch (err: any) {
+          showAlert(err.response?.data?.message || "Could not remove member.")
+        }
+      }
+    })
   }
 
   const handleLeaveWorkspace = async () => {
-    if (!window.confirm("Are you sure you want to leave this workspace?")) return
-    setIsLeaving(true)
-    try {
-      await api.delete(`/workspaces/${id}/members/me`)
-      navigate("/workspaces")
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Could not leave workspace.")
-      setIsLeaving(false)
-    }
+    setConfirmState({
+      isOpen: true,
+      title: "Leave Workspace",
+      description: "Are you sure you want to leave this workspace?",
+      variant: "destructive",
+      onConfirm: async () => {
+        setIsLeaving(true)
+        try {
+          await api.delete(`/workspaces/${id}/members/me`)
+          navigate("/workspaces")
+        } catch (err: any) {
+          showAlert(err.response?.data?.message || "Could not leave workspace.")
+          setIsLeaving(false)
+        }
+      }
+    })
   }
 
   const handleDeleteWorkspace = async () => {
-    if (!window.confirm("Are you sure you want to delete this workspace? This action cannot be undone.")) return
-    try {
-      await api.delete(`/workspaces/${id}`)
-      navigate("/workspaces")
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to delete workspace.")
-    }
+    setConfirmState({
+      isOpen: true,
+      title: "Delete Workspace",
+      description: "Are you sure you want to delete this workspace? This action cannot be undone.",
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await api.delete(`/workspaces/${id}`)
+          navigate("/workspaces")
+        } catch (err: any) {
+          showAlert(err.response?.data?.message || "Failed to delete workspace.")
+        }
+      }
+    })
   }
 
   const formatAuthors = (authors: any, paperSource?: string) => {
@@ -483,50 +623,70 @@ export default function WorkspaceDetailsPage() {
         </TabsList>
 
         {/* Keyword Graph Tab */}
-        <TabsContent value="dashboard" className="flex-1 flex flex-col rounded-2xl overflow-hidden border border-border/40 bg-background/50 relative">
+        <TabsContent value="dashboard" className="data-[state=active]:flex flex-1 flex-col rounded-2xl overflow-hidden border border-border/40 bg-background/50 relative mt-0 h-full min-h-[600px]">
           <div className="absolute top-4 left-4 z-10 glass rounded-xl px-4 py-2.5 border border-border/40 pointer-events-none">
             <h3 className="text-xs font-semibold">Mini Research Map</h3>
             <p className="text-xs text-muted-foreground">Keyword connections of your workspace</p>
           </div>
-          <div className="flex-1 cursor-move" ref={graphContainerRef}>
+          <div className="flex-1 cursor-move w-full h-full relative" ref={setGraphContainer}>
             {graphData.nodes.length > 0 ? (
-              <ForceGraph2D
-                graphData={graphData}
+              <div className="absolute inset-0">
+                <ForceGraph2D
+                  ref={fgRef}
+                  graphData={graphData}
                 width={graphSize.width}
                 height={graphSize.height}
-                nodeLabel={(node: any) => `${node.label || node.id} (${node.paperCount || node.val} papers)`}
+                dagMode="radialout"
+                dagLevelDistance={140}
+                nodeLabel={(node: any) => `${node.label || node.id}${node.paperCount ? ` (${node.paperCount} papers)` : ''}`}
                 nodeColor={(node: any) => node.color}
                 nodeVal={(node: any) => node.val}
                 backgroundColor="#00000000"
-                linkDirectionalParticles={1}
-                linkColor={() => "rgba(100, 100, 100, 0.2)"}
+                linkDirectionalParticles={0}
                 nodeCanvasObject={(node: any, ctx, globalScale) => {
                   const label = node.label || node.id;
-                  const fontSize = 12 / globalScale;
-                  ctx.font = `${fontSize}px Inter, sans-serif`;
+                  const fontSize = node.type === 'root' ? 14 / globalScale : node.type === 'category' ? 12 / globalScale : 10 / globalScale;
+                  ctx.font = `${node.type !== 'keyword' ? 'bold ' : ''}${fontSize}px Inter, sans-serif`;
                   const textWidth = ctx.measureText(label).width;
-                  const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.4);
+                  const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.8);
 
-                  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                  if (document.documentElement.classList.contains('dark')) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                  }
-                  
                   ctx.beginPath();
                   ctx.roundRect(
                     node.x - bckgDimensions[0] / 2, 
                     node.y - bckgDimensions[1] / 2, 
                     bckgDimensions[0], 
                     bckgDimensions[1],
-                    4 / globalScale
+                    (node.type === 'keyword' ? 4 : 12) / globalScale
                   );
-                  ctx.fill();
+                  
+                  const isDark = document.documentElement.classList.contains('dark');
+
+                  if (node.type === 'root') {
+                    ctx.fillStyle = isDark ? '#f8fafc' : '#334155';
+                    ctx.fill();
+                    ctx.fillStyle = isDark ? '#0f172a' : '#ffffff';
+                  } else if (node.type === 'category') {
+                    ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+                    ctx.fill();
+                    ctx.strokeStyle = node.color;
+                    ctx.lineWidth = 1.5 / globalScale;
+                    ctx.stroke();
+                    ctx.fillStyle = isDark ? '#f1f5f9' : '#334155';
+                  } else {
+                    ctx.fillStyle = isDark ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(node.x - textWidth / 2, node.y + fontSize / 2 + 2 / globalScale);
+                    ctx.lineTo(node.x + textWidth / 2, node.y + fontSize / 2 + 2 / globalScale);
+                    ctx.strokeStyle = node.color;
+                    ctx.lineWidth = 1 / globalScale;
+                    ctx.stroke();
+                    ctx.fillStyle = isDark ? '#cbd5e1' : '#475569';
+                  }
 
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
-                  ctx.fillStyle = node.color || "#6b7280";
                   ctx.fillText(label, node.x, node.y);
-
                   node.__bckgDimensions = bckgDimensions;
                 }}
                 nodePointerAreaPaint={(node: any, color, ctx) => {
@@ -536,7 +696,19 @@ export default function WorkspaceDetailsPage() {
                     ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
                   }
                 }}
+                linkColor={(link: any) => {
+                  const catColor = link.target?.color || link.source?.color || "#999999";
+                  return `${catColor}99`; // slightly transparent
+                }}
+                linkWidth={(link: any) => Math.max(1, (link.value || 1) * 1.5)}
+                linkCurvature={0.25}
+                onEngineStop={() => {
+                  if (fgRef.current) {
+                    fgRef.current.zoomToFit(400, 50);
+                  }
+                }}
               />
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
                 <GitBranch className="h-12 w-12 opacity-20" />
@@ -544,6 +716,16 @@ export default function WorkspaceDetailsPage() {
               </div>
             )}
           </div>
+
+          <ConfirmDialog
+            isOpen={confirmState.isOpen}
+            onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={confirmState.onConfirm}
+            title={confirmState.title}
+            description={confirmState.description}
+            variant={confirmState.variant}
+            hideCancel={confirmState.hideCancel}
+          />
         </TabsContent>
 
         {/* Papers Tab */}
@@ -671,17 +853,38 @@ export default function WorkspaceDetailsPage() {
                   <motion.div
                     key={getPaperId(p)}
                     variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-                    className="glass rounded-xl border border-border/40 p-4 hover:border-primary/30 transition-colors"
+                    className="glass rounded-xl border border-border/40 p-4 hover:border-primary/30 transition-colors relative group flex"
                   >
-                    <button
-                      className="text-sm font-semibold text-left hover:text-primary transition-colors line-clamp-2 w-full"
-                      onClick={() => navigate(`/papers/${getPaperId(p)}`)}
-                    >
-                      {formatText(wp?.title, "Untitled paper")}
-                    </button>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatAuthors(wp?.authors, wp?.source)} · {wp?.publicationYear || "N/A"}
-                    </p>
+                    <div className="flex-1">
+                      <button
+                        className="text-sm font-semibold text-left hover:text-primary transition-colors line-clamp-2 w-full pr-6"
+                        onClick={() => navigate(`/papers/${getPaperId(p)}`)}
+                      >
+                        {formatText(wp?.title, "Untitled paper")}
+                      </button>
+                      <div className="flex flex-col gap-1 mt-1">
+                        <p className="text-xs text-muted-foreground">
+                          {formatAuthors(wp?.authors, wp?.source)} · {wp?.publicationYear || "N/A"}
+                        </p>
+                        {p.addedBy?.name && (
+                          <p className="text-[11px] text-muted-foreground/80 flex items-center gap-1">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary/40"></span>
+                            Added by <span className="font-medium text-foreground/80">{p.addedBy.name}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={(e) => removeWorkspacePaper(getPaperId(p), e)}
+                        title="Remove from workspace"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </motion.div>
                 )
               })}
@@ -1024,6 +1227,16 @@ export default function WorkspaceDetailsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        description={confirmState.description}
+        variant={confirmState.variant}
+        hideCancel={confirmState.hideCancel}
+      />
     </motion.div>
   )
 }
