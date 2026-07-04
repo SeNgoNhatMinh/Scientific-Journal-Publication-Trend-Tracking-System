@@ -1,20 +1,16 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { Activity, GitBranch, BarChart2 } from 'lucide-react-native';
-import { AreaChart, NodeGraph } from './WorkspaceMap';
+import { Activity, BarChart2 } from 'lucide-react-native';
+import { AreaChart } from './WorkspaceMap'; // Re-use the AreaChart component
 
-export default function WorkspaceInsights({
+export default function WorkspaceTrends({
   theme,
   trends,
   papers,
-  graphNodes,
-  workspace
 }: {
   theme: any;
   trends: any;
   papers: any[];
-  graphNodes: any[];
-  workspace: any;
 }) {
   return (
     <ScrollView contentContainerStyle={styles.tabContent}>
@@ -30,20 +26,8 @@ export default function WorkspaceInsights({
         <AreaChart data={trends?.yearlyData || []} theme={theme} />
       </View>
 
-      {/* Keyword Co-occurrence Network Graph */}
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-          <GitBranch size={20} color={theme.primary} style={{ marginRight: 8 }} />
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Semantic Keyword Network</Text>
-        </View>
-        <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
-          Visual representation of keyword relationships inside this workspace.
-        </Text>
-        <NodeGraph nodes={graphNodes} centerKeyword={workspace?.name || 'Workspace'} theme={theme} />
-      </View>
-
       {/* Top Keywords */}
-      {trends?.topKeywords && trends.topKeywords.length > 0 && (
+      {trends?.topKeywords && trends.topKeywords.length > 0 ? (
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <BarChart2 size={20} color={theme.primary} style={{ marginRight: 8 }} />
@@ -53,7 +37,7 @@ export default function WorkspaceInsights({
             Most frequent terms classified across all ingested publications.
           </Text>
           <View style={{ gap: 12, marginTop: 8 }}>
-            {trends.topKeywords.slice(0, 8).map((item: any, i: number) => {
+            {trends.topKeywords.slice(0, 10).map((item: any, i: number) => {
               const maxVal = trends.topKeywords[0]?.paperCount || 1;
               const percentage = (item.paperCount / maxVal) * 100;
               return (
@@ -69,6 +53,11 @@ export default function WorkspaceInsights({
               );
             })}
           </View>
+        </View>
+      ) : (
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, alignItems: 'center', paddingVertical: 40 }]}>
+            <BarChart2 size={40} color={theme.mutedForeground} style={{ opacity: 0.3, marginBottom: 12 }} />
+            <Text style={{ color: theme.mutedForeground }}>No keyword trends data available yet.</Text>
         </View>
       )}
     </ScrollView>

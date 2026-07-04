@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, Dimensions, StyleSheet } from 'react-native';
 import { GitBranch, Activity, BookOpen } from 'lucide-react-native';
-import Svg, { Line, Circle, Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop, Path, G } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Stop, Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { CategoryColors } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
@@ -89,118 +89,74 @@ function AreaChart({ data, theme }: { data: { year: number; count: number }[]; t
   );
 }
 
-// Custom SVG Node Network Graph for Workspace keyword co-occurrence
-function NodeGraph({ nodes, centerKeyword, theme }: { nodes: any[]; centerKeyword: string; theme: any }) {
-  const chartSize = 260;
-  const cx = chartSize / 2;
-  const cy = chartSize / 2;
-
-  if (!nodes || nodes.length === 0) {
-    return (
-      <View style={styles.emptyGraph}>
-        <GitBranch size={32} color={theme.icon} style={{ opacity: 0.3, marginBottom: 8 }} />
-        <Text style={[styles.emptyGraphText, { color: theme.mutedForeground }]}>
-          No keyword relationships found. Add papers or run corpus collection to build graph.
-        </Text>
-      </View>
-    );
-  }
-
-  const visibleNodes = nodes.slice(0, 8);
-  const radius = 80;
-
-  const points = visibleNodes.map((node, i) => {
-    const angle = (i * 2 * Math.PI) / visibleNodes.length;
-    const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle);
-    return { ...node, x, y };
-  });
-
-  return (
-    <View style={styles.graphContainer}>
-      <Svg height={chartSize} width={chartSize}>
-        {/* Draw connection lines */}
-        {points.map((p, idx) => (
-          <Line
-            key={`line-${idx}`}
-            x1={cx}
-            y1={cy}
-            x2={p.x}
-            y2={p.y}
-            stroke={theme.border}
-            strokeWidth="1.5"
-          />
-        ))}
-
-        {/* Draw satellite nodes */}
-        {points.map((p, idx) => {
-          const color = CategoryColors[p.category || 'general'] || '#8b5cf6';
-          return (
-            <G key={`node-${idx}`}>
-              <Circle
-                cx={p.x}
-                cy={p.y}
-                r={13}
-                fill={color}
-                opacity={0.8}
-              />
-              <SvgText
-                x={p.x}
-                y={p.y + 20}
-                fill={theme.text}
-                fontSize="8"
-                fontWeight="bold"
-                textAnchor="middle"
-              >
-                {p.label || p.name || p.id}
-              </SvgText>
-            </G>
-          );
-        })}
-
-        {/* Draw center node */}
-        <Circle cx={cx} cy={cy} r={18} fill={theme.primary} />
-        <SvgText
-          x={cx}
-          y={cy + 3}
-          fill="#ffffff"
-          fontSize="8"
-          fontWeight="bold"
-          textAnchor="middle"
-        >
-          {centerKeyword.length > 8 ? `${centerKeyword.slice(0, 7)}.` : centerKeyword}
-        </SvgText>
-      </Svg>
-    </View>
-  );
-}
-
-export { AreaChart, NodeGraph };
+export { AreaChart };
 
 export default function WorkspaceMap({
   theme,
-  graphNodes,
-  chartSize,
-  points,
-  cx,
-  cy
+  graphData,
 }: {
   theme: any;
-  graphNodes: any[];
-  chartSize: number;
-  points: any[];
-  cx: number;
-  cy: number;
+  graphData: { nodes: any[]; links: any[] };
 }) {
-  return (
-    <ScrollView contentContainerStyle={styles.tabContent}>
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <Text style={[styles.cardTitle, { color: theme.text }]}>Workspace Entity Map</Text>
-        <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
-          Visualizes relationships extracted from workspace papers.
-        </Text>
+  const { nodes, links } = graphData;
 
-        {graphNodes.length === 0 ? (
+  // Separate nodes by type
+  const rootNode = nodes.find(n => n.type === 'root');
+  const categories = nodes.filter(n => n.type === 'category');
+  const keywords = nodes.filter(n => n.type === 'keyword');
+
+  // Horizontal Tree Layout logic
+  const rowHeight = 42;
+  const rootX = 30;
+  const catX = 150;
+  const kwX = 280;
+
+  const catPoints = new Map();
+  const kwPoints = new Map();
+
+  let currentY = 40;
+
+  categories.forEach(cat => {
+    // Find keywords linked to this category
+    const linkedKwIds = links.filter(l => l.source === cat.id).map(l => l.target);
+    const catKeywords = keywords
+      .filter(k => linkedKwIds.includes(k.id))
+      .sort((a, b) => b.val - a.val);
+      
+    // Calculate vertical space needed for this category
+    const catHeight = Math.max(60, catKeywords.length * rowHeight);
+    
+    // Position Category Node in the vertical middle of its block
+    const catY = currentY + catHeight / 2;
+    catPoints.set(cat.id, { ...cat, x: catX, y: catY });
+    
+    // Position Keyword Nodes evenly spaced within the block
+    catKeywords.forEach((kw, idx) => {
+      const kwY = currentY + (idx + 0.5) * (catHeight / Math.max(1, catKeywords.length));
+      kwPoints.set(kw.id, { ...kw, x: kwX, y: kwY });
+    });
+    
+    currentY += catHeight;
+  });
+
+  const totalHeight = Math.max(300, currentY + 40);
+  const rootY = totalHeight / 2;
+  const svgWidth = 480; // Allow horizontal scrolling if names are long
+
+  return (
+    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={[styles.cardTitle, { color: theme.text }]}>Research Map (Tree View)</Text>
+            <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
+              Visual hierarchy of workspace entities
+            </Text>
+          </View>
+          <GitBranch size={20} color={theme.primary} style={{ opacity: 0.8 }} />
+        </View>
+
+        {nodes.length <= 1 ? (
           <View style={styles.emptyContainer}>
             <GitBranch size={36} color={theme.icon} style={{ opacity: 0.2, marginBottom: 8 }} />
             <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>
@@ -208,25 +164,71 @@ export default function WorkspaceMap({
             </Text>
           </View>
         ) : (
-          <View style={styles.graphContainer}>
-            <Svg height={chartSize} width={chartSize}>
-              {points.map((p, idx) => (
-                <Line key={idx} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={theme.border} strokeWidth="1.5" />
-              ))}
-              {points.map((p, idx) => {
-                const color = CategoryColors[p.category] || CategoryColors.general;
-                return (
-                  <React.Fragment key={idx}>
-                    <Circle cx={p.x} cy={p.y} r={14} fill={color} opacity={0.8} />
-                    <SvgText x={p.x} y={p.y + 20} fill={theme.text} fontSize="8" fontWeight="bold" textAnchor="middle">
-                      {p.label || p.id}
-                    </SvgText>
-                  </React.Fragment>
-                );
-              })}
-              <Circle cx={cx} cy={cy} r={18} fill={theme.primary} />
-              <BookOpen size={14} color="#fff" style={styles.centerLogo} />
-            </Svg>
+          <View style={styles.mapWrapper}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+              <ScrollView showsVerticalScrollIndicator={true}>
+                <View style={[styles.graphContainer, { height: totalHeight, width: svgWidth }]}>
+                  <Svg height={totalHeight} width={svgWidth}>
+                    
+                    {/* Draw Links: Category -> Keywords */}
+                    {Array.from(kwPoints.values()).map((kw, idx) => {
+                      // Find which category this kw belongs to
+                      const link = links.find(l => l.target === kw.id);
+                      if (!link) return null;
+                      const catPoint = catPoints.get(link.source);
+                      if (!catPoint) return null;
+                      
+                      // Bezier curve for smoother look
+                      const pathData = `M ${catPoint.x} ${catPoint.y} C ${catPoint.x + 50} ${catPoint.y}, ${kw.x - 50} ${kw.y}, ${kw.x} ${kw.y}`;
+                      
+                      return (
+                        <Path key={`link-kw-${idx}`} d={pathData} stroke={theme.border} strokeWidth="1.5" strokeOpacity="0.4" fill="none" />
+                      );
+                    })}
+
+                    {/* Draw Links: Root -> Category */}
+                    {rootNode && Array.from(catPoints.values()).map((cat, idx) => {
+                      const pathData = `M ${rootX} ${rootY} C ${rootX + 50} ${rootY}, ${cat.x - 50} ${cat.y}, ${cat.x} ${cat.y}`;
+                      return (
+                        <Path key={`link-cat-${idx}`} d={pathData} stroke={theme.border} strokeWidth="2" strokeOpacity="0.6" fill="none" />
+                      );
+                    })}
+                    
+                    {/* Draw Keyword Nodes */}
+                    {Array.from(kwPoints.values()).map((p, idx) => (
+                      <G key={`kw-${idx}`}>
+                        <Circle cx={p.x} cy={p.y} r={6} fill={p.color || theme.primary} opacity={0.7} />
+                        <SvgText x={p.x + 12} y={p.y + 4} fill={theme.mutedForeground} fontSize="11" textAnchor="start">
+                          {p.label || p.id} {p.val > 1 ? `(${p.val})` : ''}
+                        </SvgText>
+                      </G>
+                    ))}
+
+                    {/* Draw Category Nodes */}
+                    {Array.from(catPoints.values()).map((p, idx) => (
+                      <G key={`cat-${idx}`}>
+                        <Circle cx={p.x} cy={p.y} r={10} fill={p.color || '#8b5cf6'} opacity={0.9} />
+                        <SvgText x={p.x - 14} y={p.y + 4} fill={theme.text} fontSize="12" fontWeight="bold" textAnchor="end">
+                          {p.label}
+                        </SvgText>
+                      </G>
+                    ))}
+
+                    {/* Draw Root Node */}
+                    {rootNode && (
+                      <G>
+                        <Circle cx={rootX} cy={rootY} r={16} fill={theme.primary} />
+                        <BookOpen x={rootX - 8} y={rootY - 8} size={16} color="#fff" />
+                        <SvgText x={rootX + 22} y={rootY + 5} fill={theme.text} fontSize="13" fontWeight="bold" textAnchor="start">
+                          {rootNode.label.length > 10 ? rootNode.label.slice(0,10) + '...' : rootNode.label}
+                        </SvgText>
+                      </G>
+                    )}
+
+                  </Svg>
+                </View>
+              </ScrollView>
+            </ScrollView>
           </View>
         )}
       </View>
@@ -235,14 +237,15 @@ export default function WorkspaceMap({
 }
 
 const styles = StyleSheet.create({
-  tabContent: { padding: 20, gap: 16 },
+  tabContent: { padding: 20, gap: 16, paddingBottom: 100 },
   card: { borderRadius: 16, borderWidth: 1, padding: 16 },
-  cardTitle: { fontSize: 16, fontWeight: '600' },
-  cardSubtitle: { fontSize: 12, marginTop: 2, marginBottom: 12 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  cardTitle: { fontSize: 16, fontWeight: '700' },
+  cardSubtitle: { fontSize: 12, marginTop: 4 },
   emptyContainer: { height: 160, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: 13, textAlign: 'center' },
-  graphContainer: { alignItems: 'center', justifyContent: 'center', marginVertical: 10 },
-  centerLogo: { position: 'absolute', alignSelf: 'center' },
+  mapWrapper: { borderWidth: 1, borderColor: 'rgba(150,150,150,0.1)', borderRadius: 12, marginTop: 10, overflow: 'hidden' },
+  graphContainer: { padding: 10 },
   
   // Chart styles
   emptyGraph: { height: 160, alignItems: 'center', justifyContent: 'center', padding: 20 },

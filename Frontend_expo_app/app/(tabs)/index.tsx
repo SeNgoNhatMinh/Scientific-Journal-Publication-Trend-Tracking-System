@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
+import NotificationBell from '../../components/ui/NotificationBell';
 
 const { width } = Dimensions.get('window');
 
@@ -119,23 +120,26 @@ export default function HomeScreen() {
           <Text style={[styles.logoText, { color: theme.text }]}>SciTrend</Text>
         </View>
 
-        {user ? (
-          <TouchableOpacity
-            style={[styles.profileAvatar, { backgroundColor: theme.primary + '20', borderColor: theme.primary + '30' }]}
-            onPress={() => router.push('/profile')}
-          >
-            <Text style={[styles.avatarLetter, { color: theme.primary }]}>
-              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.signInBtn, { backgroundColor: theme.primary }]}
-            onPress={() => router.push('/login')}
-          >
-            <Text style={styles.signInBtnText}>Sign In</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {user && <NotificationBell />}
+          {user ? (
+            <TouchableOpacity
+              style={[styles.profileAvatar, { backgroundColor: theme.primary + '20', borderColor: theme.primary + '30' }]}
+              onPress={() => router.push('/profile')}
+            >
+              <Text style={[styles.avatarLetter, { color: theme.primary }]}>
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.signInBtn, { backgroundColor: theme.primary }]}
+              onPress={() => router.push('/login')}
+            >
+              <Text style={styles.signInBtnText}>Sign In</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView
