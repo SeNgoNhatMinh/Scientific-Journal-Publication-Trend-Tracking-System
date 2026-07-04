@@ -340,6 +340,35 @@ router.get('/:workspaceId/papers', workspaceController.listPapers);
 
 /**
  * @swagger
+ * /workspaces/{workspaceId}/papers/{paperId}:
+ *   delete:
+ *     tags: [Workspaces]
+ *     summary: Xóa paper khỏi workspace
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: workspaceId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: paperId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Cần quyền editor
+ *       404:
+ *         description: Paper not found
+ */
+router.delete('/:workspaceId/papers/:paperId', workspaceController.removePaper);
+
+/**
+ * @swagger
  * /workspaces/{workspaceId}/papers/{paperId}/pdf:
  *   post:
  *     tags: [Workspaces]

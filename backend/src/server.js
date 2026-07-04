@@ -142,6 +142,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   `);
 });
 
+// Initialize Socket.io
+const socketService = require('./services/socketService');
+socketService.init(server);
+
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down gracefully...');

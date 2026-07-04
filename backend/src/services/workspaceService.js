@@ -103,9 +103,9 @@ const getMembership = async (workspaceId, userId) => {
     return { workspace, role: 'owner' };
   }
 
-  const member = await WorkspaceMember.findOne({ workspaceId, userId });
+  const member = await WorkspaceMember.findOne({ workspaceId, userId, status: 'active' });
   if (!member) {
-    throw createError('You do not have access to this workspace', 403);
+    throw createError('You do not have access to this workspace or have not accepted the invitation', 403);
   }
 
   return { workspace, role: member.role };
@@ -161,10 +161,13 @@ const deleteWorkspace = async (workspaceId, userId) => {
 const listWorkspaces = async (userId, { page = 1, limit = 20 } = {}) => {
   const safeLimit = parseLimit(limit, 20, 100);
   const safePage = Math.max(parseInt(page, 10) || 1, 1);
-  const memberships = await WorkspaceMember.find({ userId }).select('workspaceId role');
+  const memberships = await WorkspaceMember.find({ userId }).select('workspaceId role status');
   const workspaceIds = memberships.map(member => member.workspaceId);
   const roleByWorkspace = new Map(
     memberships.map(member => [String(member.workspaceId), member.role])
+  );
+  const statusByWorkspace = new Map(
+    memberships.map(member => [String(member.workspaceId), member.status])
   );
 
   const filter = {
@@ -185,6 +188,7 @@ const listWorkspaces = async (userId, { page = 1, limit = 20 } = {}) => {
     workspaces: workspaces.map(workspace => ({
       ...workspace,
       role: roleByWorkspace.get(String(workspace._id)) || 'viewer',
+      status: statusByWorkspace.get(String(workspace._id)) || 'active',
     })),
     total,
     page: safePage,
@@ -411,12 +415,19 @@ const addPaper = async (workspaceId, userId, { paperId, paper, tags, note, sourc
   try {
     const WorkspaceAlert = require('../models/WorkspaceAlert');
     const Notification = require('../models/Notification');
+    const User = require('../models/User');
+    const WorkspaceMember = require('../models/WorkspaceMember');
+    
     const alerts = await WorkspaceAlert.find({ workspaceId, notifyEnabled: true });
     
     if (alerts.length > 0) {
       const pTitle = (paperDoc.title || '').toLowerCase();
       const pAbstract = (paperDoc.abstract || '').toLowerCase();
       const pKeywords = (paperDoc.keywords || []).map(k => (typeof k === 'string' ? k.toLowerCase() : ''));
+      const addedByUser = await User.findById(userId).select('name');
+      const addedByName = addedByUser ? addedByUser.name : 'Someone';
+      
+      const workspaceMembers = await WorkspaceMember.find({ workspaceId, status: 'active' });
       
       for (const alert of alerts) {
         const keyword = alert.keyword.toLowerCase();
@@ -424,15 +435,22 @@ const addPaper = async (workspaceId, userId, { paperId, paper, tags, note, sourc
                         pAbstract.includes(keyword) || 
                         pKeywords.some(k => k.includes(keyword));
                         
-        if (isMatch && alert.createdBy.toString() !== userId.toString()) {
-          await Notification.create({
-            userId: alert.createdBy,
-            title: `Keyword Alert: ${alert.keyword}`,
-            message: `A new paper matching "${alert.keyword}" was added to your workspace.`,
-            type: 'newPaper',
-            refId: paperDoc._id,
-            refType: 'paper'
-          });
+        if (isMatch) {
+          for (const member of workspaceMembers) {
+            if (member.userId.toString() !== userId.toString()) {
+              const newNotification = await Notification.create({
+                userId: member.userId,
+                title: `Keyword Alert: ${alert.keyword}`,
+                message: `A new paper matching "${alert.keyword}" was added to your workspace by ${addedByName}.`,
+                type: 'newPaper',
+                refId: paperDoc._id,
+                refType: 'paper'
+              });
+              
+              const socketService = require('./socketService');
+              socketService.sendNotificationToUser(member.userId, newNotification);
+            }
+          }
         }
       }
     }
@@ -441,6 +459,21 @@ const addPaper = async (workspaceId, userId, { paperId, paper, tags, note, sourc
   }
 
   return workspacePaper;
+};
+
+const removePaper = async (workspaceId, userId, paperId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'editor');
+  ensureObjectId(paperId, 'paperId');
+  
+  const WorkspacePaper = require('../models/WorkspacePaper');
+  const result = await WorkspacePaper.findOneAndDelete({ workspaceId, paperId });
+  
+  if (!result) {
+    const { createError } = require('../utils/errors');
+    throw createError('Paper not found in workspace', 404);
+  }
+  
+  return result;
 };
 
 const listPapers = async (workspaceId, userId, { page = 1, limit = 20, tag } = {}) => {
@@ -789,6 +822,7 @@ module.exports = {
   removeMember,
   leaveWorkspace,
   addPaper,
+  removePaper,
   listPapers,
   createNote,
   listNotes,

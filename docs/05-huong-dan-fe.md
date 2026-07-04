@@ -118,6 +118,7 @@ Prefix: `/api/v1` trừ `/health` và `/api-docs`.
 | 23 | GET | `/notifications/unread-count` | JWT | — | Badge số chưa đọc |
 | 24 | PATCH | `/notifications/{id}/read` | JWT | — | |
 | 25 | PATCH | `/notifications/read-all` | JWT | — | |
+| 25b| DELETE | `/notifications/{id}` | JWT | — | Xóa 1 thông báo |
 | 26 | GET | `/trends/keyword` | Không | PASS | Live trend |
 | 27 | POST | `/trends/compare` | Không | PASS | Body: `keywords[]` |
 | 28 | GET | `/trends/emerging` | Không | PASS | Có thể `topics: []` nếu chưa corpus |

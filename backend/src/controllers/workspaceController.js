@@ -107,6 +107,22 @@ const addPaper = async (req, res, next) => {
   }
 };
 
+const removePaper = async (req, res, next) => {
+  try {
+    await workspaceService.removePaper(
+      req.params.workspaceId,
+      req.user.id,
+      req.params.paperId
+    );
+    res.status(200).json({
+      success: true,
+      message: 'Paper removed from workspace',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const listPapers = async (req, res, next) => {
   try {
     const result = await workspaceService.listPapers(
@@ -259,6 +275,7 @@ module.exports = {
   removeMember,
   leaveWorkspace,
   addPaper,
+  removePaper,
   listPapers,
   createNote,
   listNotes,
