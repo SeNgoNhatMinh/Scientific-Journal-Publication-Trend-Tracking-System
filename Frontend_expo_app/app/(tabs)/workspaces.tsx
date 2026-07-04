@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
+import NotificationBell from '../../components/ui/NotificationBell';
 
 export default function WorkspacesScreen() {
   const router = useRouter();
@@ -107,10 +109,23 @@ export default function WorkspacesScreen() {
   };
 
   const renderWorkspace = ({ item }: { item: any }) => {
+    const isPending = item.status === 'pending';
+
+    const handlePress = () => {
+      if (isPending) {
+        Alert.alert(
+          'Invitation Pending',
+          'You have a pending invitation to this workspace. Please accept it from the web interface or ask the owner.'
+        );
+      } else {
+        router.push(`/workspace/${item._id}` as any);
+      }
+    };
+
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
-        onPress={() => router.push(`/workspace/${item._id}` as any)}
+        style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, opacity: isPending ? 0.7 : 1 }]}
+        onPress={handlePress}
       >
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleContainer}>
@@ -123,7 +138,13 @@ export default function WorkspacesScreen() {
               {item.name}
             </Text>
           </View>
-          <ChevronRight size={20} color={theme.mutedForeground} />
+          {isPending ? (
+            <View style={[styles.badge, { backgroundColor: '#f59e0b20' }]}>
+              <Text style={{ color: '#f59e0b', fontSize: 10, fontWeight: '600' }}>Pending</Text>
+            </View>
+          ) : (
+            <ChevronRight size={20} color={theme.mutedForeground} />
+          )}
         </View>
         
         {item.description ? (
@@ -188,12 +209,15 @@ export default function WorkspacesScreen() {
             Organize papers and track trends
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: theme.primary + '20' }]}
-          onPress={() => setModalVisible(true)}
-        >
-          <Plus size={20} color={theme.primary} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {isLoggedIn && <NotificationBell />}
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: theme.primary + '20' }]}
+            onPress={() => setModalVisible(true)}
+          >
+            <Plus size={20} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -325,6 +349,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 8,
     elevation: 2,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cardTitleContainer: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 16 },

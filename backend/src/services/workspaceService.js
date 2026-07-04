@@ -488,7 +488,7 @@ const listPapers = async (workspaceId, userId, { page = 1, limit = 20, tag } = {
       .sort({ createdAt: -1 })
       .skip((safePage - 1) * safeLimit)
       .limit(safeLimit)
-      .populate('paperId', 'title abstract publicationYear citationCount journalName doi source url keywords keywordIds')
+      .populate('paperId', 'title abstract authors publicationYear citationCount journalName doi source url keywords keywordIds')
       .populate('addedBy', 'name email'),
     WorkspacePaper.countDocuments(filter),
   ]);
