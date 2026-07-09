@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// In dev: requests go to localhost:5173/api/v1 → Vite proxies to Railway backend (no CORS)
+// Dev: localhost:5173/api/v1 → Vite proxy → backend local (http://localhost:5000)
 // In production: VITE_API_BASE_URL should point to the real backend URL
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',

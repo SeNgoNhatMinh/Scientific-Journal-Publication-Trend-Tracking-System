@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => {
           target: BACKEND_TARGET,
           changeOrigin: true,
           secure: !USE_LOCAL,
+          timeout: 120000,
+          proxyTimeout: 120000,
         },
         '/uploads': {
           target: BACKEND_TARGET,
@@ -36,6 +38,12 @@ export default defineConfig(({ mode }) => {
         },
         '/health': {
           target: BACKEND_TARGET,
+          changeOrigin: true,
+          secure: !USE_LOCAL,
+        },
+        '/socket.io': {
+          target: BACKEND_TARGET,
+          ws: true,
           changeOrigin: true,
           secure: !USE_LOCAL,
         },

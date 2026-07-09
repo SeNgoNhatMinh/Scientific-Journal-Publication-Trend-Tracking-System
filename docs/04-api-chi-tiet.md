@@ -635,6 +635,10 @@ Base: `/api/v1/notifications` — tất cả endpoint yêu cầu `Authorization:
 
 **Response `200`:** `{ success, modifiedCount }`
 
+### `DELETE /notifications/{notificationId}`
+
+**Response `200`:** `{ success, message: 'Notification deleted' }` — `404` nếu không thuộc user.
+
 Tự sinh khi corpus run `completed` (user đã `follow` run) và khi `isEmerging` (trending).
 
 ---

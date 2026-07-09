@@ -79,4 +79,25 @@ router.patch('/read-all', notificationController.markAllRead);
  */
 router.patch('/:notificationId/read', notificationController.markRead);
 
+/**
+ * @swagger
+ * /notifications/{notificationId}:
+ *   delete:
+ *     tags: [Notifications]
+ *     summary: Xóa một thông báo
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: notificationId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ *       404:
+ *         description: Not found
+ */
+router.delete('/:notificationId', notificationController.deleteNotification);
+
 module.exports = router;

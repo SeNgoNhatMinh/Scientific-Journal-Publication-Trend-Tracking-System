@@ -7,38 +7,20 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   useColorScheme,
-  TextInput,
-  FlatList,
-  Modal,
-  Dimensions,
   Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  ArrowLeft,
-  Plus,
-  GitBranch,
-  FileText,
-  StickyNote,
-  Search,
-  BookOpen,
-  X,
-  Trash2,
-} from 'lucide-react-native';
-import Svg, { Line, Circle, Text as SvgText } from 'react-native-svg';
+import { ArrowLeft, Trash2, LogOut } from 'lucide-react-native';
 import api from '../../lib/api';
 import { Colors } from '../../constants/theme';
 
-const { width } = Dimensions.get('window');
-
-const CATEGORY_COLORS: Record<string, string> = {
-  domain: '#3b82f6',
-  algorithm: '#ef4444',
-  application: '#22c55e',
-  method: '#a855f7',
-  dataset: '#f97316',
-  general: '#6b7280',
-};
+// Import newly separated components
+import WorkspaceMap from '../../components/workspace/WorkspaceMap';
+import WorkspacePapers from '../../components/workspace/WorkspacePapers';
+import WorkspaceTrends from '../../components/workspace/WorkspaceTrends';
+import WorkspaceMembers from '../../components/workspace/WorkspaceMembers';
+import WorkspaceAlerts from '../../components/workspace/WorkspaceAlerts';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 export default function WorkspaceDetailsScreen() {
   const router = useRouter();
@@ -46,30 +28,37 @@ export default function WorkspaceDetailsScreen() {
   const systemScheme = useColorScheme();
   const theme = Colors[systemScheme || 'dark'];
 
-  const [activeTab, setActiveTab] = useState<'map' | 'papers' | 'notes'>('map');
+  const [activeTab, setActiveTab] = useState<'map' | 'papers' | 'trends' | 'members' | 'alerts'>('map');
   const [workspace, setWorkspace] = useState<any>(null);
   const [role, setRole] = useState<string>('viewer');
   const [papers, setPapers] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
-  const [graphNodes, setGraphNodes] = useState<any[]>([]);
+  const [graphData, setGraphData] = useState<{ nodes: any[]; links: any[] }>({ nodes: [], links: [] });
+  const [trends, setTrends] = useState<any>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Search/Add Papers State
   const [showAddPaper, setShowAddPaper] = useState(false);
   const [paperQuery, setPaperQuery] = useState('');
+  const [searchSource, setSearchSource] = useState('openalex');
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchTotal, setSearchTotal] = useState(0);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
 
-  // Add Note State
-  const [showAddNote, setShowAddNote] = useState(false);
-  const [noteTitle, setNoteTitle] = useState('');
-  const [noteContent, setNoteContent] = useState('');
-  const [isSavingNote, setIsSavingNote] = useState(false);
+  // Confirm Modals
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
-  const fetchWorkspaceData = async () => {
+  // Corpus Run State
+  const [corpusKeyword, setCorpusKeyword] = useState('');
+  const [isRunningCorpus, setIsRunningCorpus] = useState(false);
+
+  const fetchWorkspaceData = async (showLoading = true) => {
     if (!id) return;
-    setIsLoading(true);
+    if (showLoading) setIsLoading(true);
     try {
       // 1. Fetch details
       const wsRes = await api.get(`/workspaces/${id}`);
@@ -80,21 +69,76 @@ export default function WorkspaceDetailsScreen() {
       const papersRes = await api.get(`/workspaces/${id}/papers`);
       setPapers(papersRes.data.papers || []);
 
-      // 3. Fetch notes
-      try {
-        const notesRes = await api.get(`/workspaces/${id}/notes`);
-        setNotes(notesRes.data.notes || []);
-      } catch (e) {
-        setNotes([]);
-      }
-
       // 4. Fetch Graph
       try {
         const graphRes = await api.get(`/workspaces/${id}/keyword-graph`);
-        setGraphNodes(graphRes.data.nodes || []);
+        
+        // buildGraph logic
+        const rawNodes = graphRes.data.nodes || [];
+        const nodes: any[] = [];
+        const links: any[] = [];
+        
+        if (rawNodes.length > 0) {
+          const rootId = "root_workspace";
+          const wsName = wsRes.data.workspace?.name || wsRes.data.name || "Workspace";
+          
+          nodes.push({
+            id: rootId,
+            label: wsName,
+            type: "root",
+            val: 5,
+            color: "#334155",
+          });
+
+          const categories = Array.from(new Set(rawNodes.map((n: any) => n.category || "general")));
+          categories.forEach((cat: any) => {
+            const catId = `cat_${cat}`;
+            nodes.push({
+              id: catId,
+              label: (cat as string).charAt(0).toUpperCase() + (cat as string).slice(1),
+              type: "category",
+              category: cat,
+              val: 3,
+              color: '#8b5cf6', // general category color fallback
+            });
+            links.push({ source: rootId, target: catId, value: 2 });
+          });
+
+          rawNodes.forEach((n: any) => {
+            const catId = `cat_${n.category || "general"}`;
+            nodes.push({
+              ...n,
+              type: "keyword",
+              val: n.paperCount || 1,
+              color: '#10b981', // general keyword color fallback
+            });
+            links.push({ source: catId, target: n.id, value: 1 });
+          });
+        }
+        
+        setGraphData({ nodes, links });
       } catch (e) {
-        setGraphNodes([]);
+        setGraphData({ nodes: [], links: [] });
       }
+
+      // 5. Fetch Trends
+      try {
+        const trendsRes = await api.get(`/workspaces/${id}/trends`);
+        setTrends(trendsRes.data);
+      } catch (e) {}
+
+      // 6. Fetch Alerts
+      try {
+        const alertsRes = await api.get(`/workspaces/${id}/alerts`);
+        setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data.alerts || []);
+      } catch (e) {}
+
+      // 7. Fetch Members
+      try {
+        const membersRes = await api.get(`/workspaces/${id}/members`);
+        setMembers(membersRes.data.members || []);
+      } catch (e) {}
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -106,17 +150,30 @@ export default function WorkspaceDetailsScreen() {
     fetchWorkspaceData();
   }, [id]);
 
-  const searchAcademicPapers = async () => {
-    if (!paperQuery.trim()) return;
+  const searchAcademicPapers = async (loadMore = false) => {
+    if (!paperQuery.trim() || isSearching) return;
+    
+    // If we're loading more but already have all results, don't fetch
+    if (loadMore && searchResults.length >= searchTotal && searchTotal > 0) return;
+
     setIsSearching(true);
     try {
+      const nextPage = loadMore ? searchPage + 1 : 1;
       const res = await api.get('/sources/search', {
-        params: { source: 'openalex', keyword: paperQuery.trim(), limit: 6 },
+        params: { source: searchSource, keyword: paperQuery.trim(), limit: 20, page: nextPage },
       });
-      setSearchResults(res.data.papers || []);
+      
+      const newPapers = res.data.papers || [];
+      if (loadMore) {
+        setSearchResults((prev) => [...prev, ...newPapers]);
+      } else {
+        setSearchResults(newPapers);
+      }
+      setSearchPage(nextPage);
+      setSearchTotal(res.data.total || 0);
     } catch (e) {
       console.error(e);
-      setSearchResults([]);
+      if (!loadMore) setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -153,92 +210,78 @@ export default function WorkspaceDetailsScreen() {
         source: 'search',
       });
 
-      // Reload
-      const papersRes = await api.get(`/workspaces/${id}/papers`);
-      setPapers(papersRes.data.papers || []);
-      try {
-        const graphRes = await api.get(`/workspaces/${id}/keyword-graph`);
-        setGraphNodes(graphRes.data.nodes || []);
-      } catch (e) {}
-
-      setShowAddPaper(false);
-      setSearchResults([]);
-      setPaperQuery('');
+      // Reload all data (silently)
+      await fetchWorkspaceData(false);
+      
+      // Just clear the addingId to stop the spinner, don't clear the search!
+      setAddingId(null);
     } catch (err) {
       console.error(err);
-    } finally {
+      Alert.alert('Error', 'Failed to add paper to workspace.');
       setAddingId(null);
     }
   };
 
-  const createNote = async () => {
-    if (!noteTitle.trim()) return;
-    setIsSavingNote(true);
+  const runCorpus = async () => {
+    if (!corpusKeyword.trim()) return;
+    setIsRunningCorpus(true);
     try {
-      await api.post(`/workspaces/${id}/notes`, {
-        title: noteTitle,
-        content: noteContent,
+      await api.post(`/workspaces/${id}/corpus/runs`, {
+        seedKeyword: corpusKeyword,
+        source: 'openalex',
+        maxPages: 2,
       });
-
-      // Reload
-      const notesRes = await api.get(`/workspaces/${id}/notes`);
-      setNotes(notesRes.data.notes || []);
-
-      setShowAddNote(false);
-      setNoteTitle('');
-      setNoteContent('');
+      Alert.alert('Success', 'Corpus run started! Papers will be added automatically.');
+      setCorpusKeyword('');
     } catch (e) {
-      console.error(e);
+      Alert.alert('Error', 'Failed to run corpus');
     } finally {
-      setIsSavingNote(false);
+      setIsRunningCorpus(false);
     }
   };
 
-  const handleDeleteWorkspace = () => {
-    Alert.alert(
-      'Delete Workspace',
-      'Are you sure you want to delete this workspace? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/workspaces/${id}`);
-              router.push('/(tabs)/library');
-            } catch (err: any) {
-              Alert.alert('Error', err.response?.data?.message || 'Failed to delete workspace.');
-            }
-          },
-        },
-      ]
-    );
+  const removePaperFromWorkspace = async (paperId: string) => {
+    try {
+      await api.delete(`/workspaces/${id}/papers/${paperId}`);
+      // Update graph and trends silently
+      await fetchWorkspaceData(false);
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to remove paper');
+    }
   };
 
-  const formatAuthors = (authors: any[]) => {
-    if (!authors || authors.length === 0) return 'Unknown Authors';
+  const confirmDeleteWorkspace = async () => {
+    try {
+      await api.delete(`/workspaces/${id}`);
+      router.replace('/(tabs)/workspaces');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to delete workspace.');
+    }
+  };
+
+  const confirmLeaveWorkspace = async () => {
+    try {
+      await api.delete(`/workspaces/${id}/members/me`);
+      router.replace('/(tabs)/workspaces');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Could not leave workspace.');
+    }
+  };
+
+  const formatAuthors = (authors: any[], paperSource?: string) => {
+    if (!authors || authors.length === 0) {
+      return paperSource === 'exa' ? 'Authors not available from Exa' : 'Unknown Authors';
+    }
     if (typeof authors[0] === 'string') return authors.join(', ');
-    return authors.map((a) => a.name).join(', ');
+    return authors.map((a: any) => a.name || a.author?.display_name || a.display_name || a).join(', ');
   };
 
   const getUnwrappedPaperId = (p: any) => {
-    return p.paper?._id || p.paper?.id || p._id || p.id;
+    return p?.paperId?._id || p?.paperId?.id || p?.paper?._id || p?.paper?.id || p?._id || p?.id || '';
   };
 
-  // SVG network variables
-  const chartSize = 300;
-  const cx = chartSize / 2;
-  const cy = chartSize / 2;
-  const graphRadius = 90;
-  const visibleNodes = graphNodes.slice(0, 8);
-
-  const points = visibleNodes.map((n, idx) => {
-    const angle = (idx * 2 * Math.PI) / visibleNodes.length;
-    const x = cx + graphRadius * Math.cos(angle);
-    const y = cy + graphRadius * Math.sin(angle);
-    return { ...n, x, y };
-  });
+  // Render Functions
 
   if (isLoading) {
     return (
@@ -252,565 +295,141 @@ export default function WorkspaceDetailsScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header Info */}
       <View style={styles.headerInfo}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <ArrowLeft size={20} color={theme.text} />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.wsName, { color: theme.text }]}>{workspace?.name}</Text>
-          <Text style={[styles.wsDesc, { color: theme.muted }]}>
-            {workspace?.description || 'No description provided.'}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.wsName, { color: theme.text }]} numberOfLines={1}>
+              {workspace?.name || 'Loading...'}
+            </Text>
+            {workspace && (
+              <View style={[styles.roleBadge, { borderColor: theme.border }]}>
+                <Text style={[styles.roleBadgeText, { color: theme.text }]}>{role.toUpperCase()}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.wsDesc, { color: theme.mutedForeground }]} numberOfLines={2}>
+            {workspace?.description || 'No description provided'}
           </Text>
         </View>
-        {role === 'owner' && (
-          <TouchableOpacity onPress={handleDeleteWorkspace} style={styles.deleteBtn}>
-            <Trash2 size={16} color={theme.destructive} />
+        
+        {role === 'owner' ? (
+          <TouchableOpacity style={[styles.backBtn, { marginLeft: 8 }]} onPress={() => setShowDeleteConfirm(true)}>
+            <Trash2 size={20} color={theme.destructive} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={[styles.backBtn, { marginLeft: 8 }]} onPress={() => setShowLeaveConfirm(true)}>
+            <LogOut size={20} color={theme.destructive} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Tabs Selector */}
-      <View style={[styles.tabsRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        {[
-          { id: 'map', label: 'Research Map', icon: GitBranch },
-          { id: 'papers', label: `Papers (${papers.length})`, icon: FileText },
-          { id: 'notes', label: `Notes (${notes.length})`, icon: StickyNote },
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            onPress={() => setActiveTab(tab.id as any)}
-            style={[
-              styles.tabBtn,
-              activeTab === tab.id && { borderBottomColor: theme.primary, borderBottomWidth: 2 },
-            ]}
-          >
-            <tab.icon size={15} color={activeTab === tab.id ? theme.primary : theme.icon} />
-            <Text
-              style={[
-                styles.tabText,
-                { color: theme.text },
-                activeTab === tab.id && { color: theme.primary, fontWeight: 'bold' },
-              ]}
+      {/* Tabs */}
+      <View style={styles.tabsWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.tabsScroll, { borderBottomColor: theme.border }]}>
+          {[
+            { id: 'map', label: 'Research Map' },
+            { id: 'papers', label: 'Papers' },
+            { id: 'trends', label: 'Trends' },
+            { id: 'members', label: 'Members' },
+            { id: 'alerts', label: 'Alerts' },
+          ].map((t) => (
+            <TouchableOpacity
+              key={t.id}
+              style={[styles.tabBtn, activeTab === t.id && { borderBottomWidth: 2, borderBottomColor: theme.primary }]}
+              onPress={() => setActiveTab(t.id as any)}
             >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text style={[styles.tabText, { color: activeTab === t.id ? theme.primary : theme.mutedForeground }]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {/* Research Map Tab */}
+      {/* Extracted Tab Contents */}
       {activeTab === 'map' && (
-        <ScrollView contentContainerStyle={styles.mapTabContent}>
-          <View style={[styles.mapCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.mapTitle, { color: theme.text }]}>Workspace Entity Map</Text>
-            <Text style={[styles.mapSubtitle, { color: theme.muted }]}>
-              Visualizes relationships extracted from workspace papers.
-            </Text>
-
-            {graphNodes.length === 0 ? (
-              <View style={styles.emptyMap}>
-                <GitBranch size={36} color={theme.icon} style={{ opacity: 0.2, marginBottom: 8 }} />
-                <Text style={[styles.emptyMapText, { color: theme.muted }]}>
-                  Add papers to populate this workspace research map.
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.graphContainer}>
-                <Svg height={chartSize} width={chartSize}>
-                  {points.map((p, idx) => (
-                    <Line
-                      key={idx}
-                      x1={cx}
-                      y1={cy}
-                      x2={p.x}
-                      y2={p.y}
-                      stroke={theme.border}
-                      strokeWidth="1.5"
-                    />
-                  ))}
-                  {points.map((p, idx) => {
-                    const color = CATEGORY_COLORS[p.category] || CATEGORY_COLORS.general;
-                    return (
-                      <React.Fragment key={idx}>
-                        <Circle cx={p.x} cy={p.y} r={14} fill={color} opacity={0.8} />
-                        <SvgText
-                          x={p.x}
-                          y={p.y + 20}
-                          fill={theme.text}
-                          fontSize="8"
-                          fontWeight="bold"
-                          textAnchor="middle"
-                        >
-                          {p.label || p.id}
-                        </SvgText>
-                      </React.Fragment>
-                    );
-                  })}
-                  <Circle cx={cx} cy={cy} r={18} fill={theme.primary} />
-                  <BookOpen size={14} color="#fff" style={styles.centerLogo} />
-                </Svg>
-              </View>
-            )}
-          </View>
-        </ScrollView>
+        <WorkspaceMap
+          theme={theme}
+          graphData={graphData}
+        />
       )}
 
-      {/* Papers Tab */}
       {activeTab === 'papers' && (
-        <View style={{ flex: 1 }}>
-          <View style={styles.actionRow}>
-            <Text style={[styles.statsLabel, { color: theme.muted }]}>{papers.length} publications</Text>
-            <TouchableOpacity
-              onPress={() => setShowAddPaper(true)}
-              style={[styles.addBtn, { backgroundColor: theme.primary }]}
-            >
-              <Plus size={16} color="#fff" style={{ marginRight: 4 }} />
-              <Text style={styles.addBtnText}>Add Paper</Text>
-            </TouchableOpacity>
-          </View>
-
-          {papers.length === 0 ? (
-            <View style={styles.centerContainer}>
-              <FileText size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-              <Text style={[styles.emptyText, { color: theme.muted }]}>No papers in this workspace.</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={papers}
-              keyExtractor={(item) => getUnwrappedPaperId(item).toString()}
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => {
-                const p = item.paper || item;
-                const pId = getUnwrappedPaperId(item);
-                return (
-                  <TouchableOpacity
-                    onPress={() => router.push(`/paper/${pId}`)}
-                    style={[styles.paperCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-                  >
-                    <Text style={[styles.paperTitle, { color: theme.text }]} numberOfLines={2}>
-                      {p.title || 'Untitled Paper'}
-                    </Text>
-                    <Text style={[styles.paperAuthors, { color: theme.muted }]}>
-                      {formatAuthors(p.authors)} · {p.publicationYear || 'N/A'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          )}
-
-          {/* Add Paper Modal */}
-          <Modal visible={showAddPaper} transparent animationType="slide">
-            <View style={styles.modalOverlay}>
-              <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.text }]}>Add Research Paper</Text>
-                  <TouchableOpacity onPress={() => setShowAddPaper(false)}>
-                    <X size={20} color={theme.icon} />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={[styles.modalSearchBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                  <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
-                  <TextInput
-                    placeholder="Search OpenAlex academic papers..."
-                    placeholderTextColor={theme.muted}
-                    value={paperQuery}
-                    onChangeText={setPaperQuery}
-                    style={[styles.searchInput, { color: theme.text }]}
-                    onSubmitEditing={searchAcademicPapers}
-                  />
-                  <TouchableOpacity
-                    onPress={searchAcademicPapers}
-                    style={[styles.modalSearchBtn, { backgroundColor: theme.primary }]}
-                  >
-                    {isSearching ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalSearchBtnText}>Go</Text>}
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView contentContainerStyle={styles.modalResultsScroll}>
-                  {searchResults.map((item) => (
-                    <View
-                      key={item.id}
-                      style={[styles.resultItem, { borderBottomColor: theme.border }]}
-                    >
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={[styles.resultTitle, { color: theme.text }]} numberOfLines={2}>
-                          {item.title}
-                        </Text>
-                        <Text style={[styles.resultMeta, { color: theme.muted }]}>
-                          {formatAuthors(item.authors)} · {item.publicationYear || 'N/A'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => addPaperToWorkspace(item)}
-                        disabled={addingId === (item.id || item.title)}
-                        style={[styles.addResultBtn, { backgroundColor: theme.primary }]}
-                      >
-                        {addingId === (item.id || item.title) ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.addResultBtnText}>Add</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  {searchResults.length === 0 && !isSearching && (
-                    <Text style={[styles.emptyModalResults, { color: theme.muted }]}>
-                      Search above to display results.
-                    </Text>
-                  )}
-                </ScrollView>
-              </View>
-            </View>
-          </Modal>
-        </View>
+        <WorkspacePapers
+          theme={theme}
+          papers={papers}
+          showAddPaper={showAddPaper}
+          setShowAddPaper={setShowAddPaper}
+          paperQuery={paperQuery}
+          setPaperQuery={setPaperQuery}
+          searchSource={searchSource}
+          setSearchSource={setSearchSource}
+          searchAcademicPapers={() => searchAcademicPapers(false)}
+          loadMorePapers={() => searchAcademicPapers(true)}
+          isSearching={isSearching}
+          searchResults={searchResults}
+          searchTotal={searchTotal}
+          addPaperToWorkspace={addPaperToWorkspace}
+          removePaperFromWorkspace={removePaperFromWorkspace}
+          addingId={addingId}
+          formatAuthors={formatAuthors}
+          getUnwrappedPaperId={getUnwrappedPaperId}
+          router={router}
+        />
       )}
 
-      {/* Notes Tab */}
-      {activeTab === 'notes' && (
-        <View style={{ flex: 1 }}>
-          <View style={styles.actionRow}>
-            <Text style={[styles.statsLabel, { color: theme.muted }]}>{notes.length} research notes</Text>
-            <TouchableOpacity
-              onPress={() => setShowAddNote(true)}
-              style={[styles.addBtn, { backgroundColor: theme.primary }]}
-            >
-              <Plus size={16} color="#fff" style={{ marginRight: 4 }} />
-              <Text style={styles.addBtnText}>New Note</Text>
-            </TouchableOpacity>
-          </View>
-
-          {notes.length === 0 ? (
-            <View style={styles.centerContainer}>
-              <StickyNote size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-              <Text style={[styles.emptyText, { color: theme.muted }]}>No research notes written yet.</Text>
-            </View>
-          ) : (
-            <FlatList
-              data={notes}
-              keyExtractor={(item) => (item._id || item.id).toString()}
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <View style={[styles.noteCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[styles.noteTitle, { color: theme.text }]}>{item.title}</Text>
-                  <Text style={[styles.noteContentText, { color: theme.muted }]}>{item.content}</Text>
-                </View>
-              )}
-            />
-          )}
-
-          {/* New Note Modal */}
-          <Modal visible={showAddNote} transparent animationType="slide">
-            <View style={styles.modalOverlay}>
-              <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.text }]}>Add Research Note</Text>
-                  <TouchableOpacity onPress={() => setShowAddNote(false)}>
-                    <X size={20} color={theme.icon} />
-                  </TouchableOpacity>
-                </View>
-
-                <TextInput
-                  placeholder="Note Title"
-                  placeholderTextColor={theme.muted}
-                  value={noteTitle}
-                  onChangeText={setNoteTitle}
-                  style={[styles.modalInput, { color: theme.text, borderColor: theme.border }]}
-                />
-                <TextInput
-                  placeholder="Content details..."
-                  placeholderTextColor={theme.muted}
-                  value={noteContent}
-                  onChangeText={setNoteContent}
-                  multiline
-                  numberOfLines={6}
-                  style={[
-                    styles.modalInput,
-                    { color: theme.text, borderColor: theme.border, height: 120, textAlignVertical: 'top' },
-                  ]}
-                />
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    onPress={() => setShowAddNote(false)}
-                    style={[styles.modalBtn, { borderColor: theme.border, borderWidth: 1 }]}
-                  >
-                    <Text style={[styles.modalBtnText, { color: theme.text }]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={createNote}
-                    disabled={isSavingNote || !noteTitle.trim()}
-                    style={[styles.modalBtn, { backgroundColor: theme.primary }]}
-                  >
-                    {isSavingNote ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={[styles.modalBtnText, { color: '#ffffff', fontWeight: 'bold' }]}>Save</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
-        </View>
+      {activeTab === 'trends' && (
+        <WorkspaceTrends theme={theme} trends={trends} papers={papers} />
       )}
+
+      {activeTab === 'members' && (
+        <WorkspaceMembers
+          theme={theme}
+          members={members}
+          workspaceId={id as string}
+          role={role}
+          onMembersUpdated={() => fetchWorkspaceData(false)}
+        />
+      )}
+
+      {activeTab === 'alerts' && (
+        <WorkspaceAlerts theme={theme} alerts={alerts} />
+      )}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDeleteWorkspace}
+        title="Delete Workspace"
+        description="Are you sure you want to delete this workspace? This action cannot be undone."
+        confirmText="Delete"
+        isDanger={true}
+      />
+      <ConfirmDialog
+        isOpen={showLeaveConfirm}
+        onClose={() => setShowLeaveConfirm(false)}
+        onConfirm={confirmLeaveWorkspace}
+        title="Leave Workspace"
+        description="Are you sure you want to leave this workspace?"
+        confirmText="Leave"
+        isDanger={true}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerInfo: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  wsName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  wsDesc: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  deleteBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#ff000010',
-    marginLeft: 10,
-  },
-  tabsRow: {
-    flexDirection: 'row',
-    height: 44,
-    borderBottomWidth: 1,
-    paddingHorizontal: 10,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: '100%',
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  mapTabContent: {
-    padding: 20,
-  },
-  mapCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    alignItems: 'stretch',
-  },
-  mapTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  mapSubtitle: {
-    fontSize: 11,
-    marginBottom: 16,
-  },
-  emptyMap: {
-    height: 200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyMapText: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  graphContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 14,
-  },
-  centerLogo: {
-    position: 'absolute',
-    alignSelf: 'center',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  statsLabel: {
-    fontSize: 13,
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: 8,
-  },
-  addBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 13,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  paperCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 10,
-  },
-  paperTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    lineHeight: 18,
-  },
-  paperAuthors: {
-    fontSize: 11,
-    marginTop: 4,
-  },
-  noteCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 10,
-  },
-  noteTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  noteContentText: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    width: '100%',
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalSearchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingLeft: 10,
-    paddingRight: 4,
-    marginBottom: 12,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 13,
-  },
-  modalSearchBtn: {
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSearchBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  modalResultsScroll: {
-    gap: 8,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  resultTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  resultMeta: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-  addResultBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  addResultBtnText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  emptyModalResults: {
-    fontSize: 11,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  modalInput: {
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    marginBottom: 12,
-    fontSize: 13,
-  },
-  modalDesc: {
-    fontSize: 11,
-    lineHeight: 15,
-    marginBottom: 14,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 8,
-  },
-  modalBtn: {
-    paddingHorizontal: 14,
-    height: 34,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnText: {
-    fontSize: 12,
-  },
+  container: { flex: 1 },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerInfo: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 60 },
+  backBtn: { padding: 8, marginRight: 8 },
+  wsName: { fontSize: 20, fontWeight: '700' },
+  wsDesc: { fontSize: 13, marginTop: 4 },
+  roleBadge: { borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 8 },
+  roleBadgeText: { fontSize: 10, fontWeight: '600' },
+  tabsWrapper: { borderBottomWidth: 1 },
+  tabsScroll: { paddingHorizontal: 16 },
+  tabBtn: { paddingVertical: 12, paddingHorizontal: 16, marginRight: 8 },
+  tabText: { fontSize: 14, fontWeight: '600' },
 });

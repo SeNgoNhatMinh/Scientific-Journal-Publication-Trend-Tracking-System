@@ -1353,7 +1353,7 @@ Collection WDP hợp nhất — chi tiết trường: [13-schema-hop-nhat.md](13
 
 ### Notifications API
 
-`GET/PATCH /api/v1/notifications/*` (JWT). Sinh tự động khi corpus hoàn tất / emerging.
+`GET/PATCH/DELETE /api/v1/notifications/*` (JWT). Sinh tự động khi corpus hoàn tất / emerging / xóa thông báo.
 
 ---
 

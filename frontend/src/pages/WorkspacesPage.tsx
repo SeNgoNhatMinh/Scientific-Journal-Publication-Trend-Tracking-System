@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import api from "@/lib/api"
 import { motion, AnimatePresence } from "framer-motion"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 // API: GET  /workspaces       → { success, workspaces, total, page, limit }
 // API: POST /workspaces       → body { name, description?, visibility?, plan? }
@@ -43,6 +44,9 @@ export default function WorkspacesPage() {
   const [newWorkspaceDesc, setNewWorkspaceDesc] = useState("")
   const [newWorkspaceVisibility, setNewWorkspaceVisibility] = useState("private")
   const [newWorkspacePlan, setNewWorkspacePlan] = useState("free")
+
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [alertMessage, setAlertMessage] = useState("")
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -105,11 +109,13 @@ export default function WorkspacesPage() {
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 rounded-xl glow-primary">
-              <Plus className="h-4 w-4" /> New Workspace
-            </Button>
-          </DialogTrigger>
+          {workspaces.length > 0 && (
+            <DialogTrigger asChild>
+              <Button className="gap-2 rounded-xl glow-primary">
+                <Plus className="h-4 w-4" /> New Workspace
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="glass border-border/50 rounded-2xl">
             <form onSubmit={handleCreateWorkspace}>
               <DialogHeader>
@@ -215,7 +221,15 @@ export default function WorkspacesPage() {
                   variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                 >
                   <button
-                    onClick={() => navigate(`/workspaces/${ws._id}`)}
+                    onClick={(e) => {
+                      if (ws.status === 'pending') {
+                        e.preventDefault()
+                        setAlertMessage("You must accept the invitation sent to your email before accessing this workspace.")
+                        setAlertOpen(true)
+                        return
+                      }
+                      navigate(`/workspaces/${ws._id}`)
+                    }}
                     className={`w-full text-left glass rounded-2xl border border-border/40 hover:border-primary/30 transition-all duration-300 card-hover overflow-hidden group bg-gradient-to-br ${gradient}`}
                   >
                     {/* Card body */}
@@ -224,9 +238,15 @@ export default function WorkspacesPage() {
                         <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                           <FolderKanban className="h-5 w-5 text-primary" />
                         </div>
-                        <h3 className="font-semibold text-base group-hover:text-primary transition-colors">
+                        <h3 className="font-semibold text-base group-hover:text-primary transition-colors flex-1">
                           {ws.name}
                         </h3>
+                        {ws.status === 'pending' && (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-xs font-medium border border-amber-500/20">Pending</span>
+                        )}
+                        {ws.status === 'active' && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 text-xs font-medium border border-emerald-500/20">Joined</span>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
                         {ws.description || "No description provided."}
@@ -252,9 +272,15 @@ export default function WorkspacesPage() {
 
                     {/* Footer */}
                     <div className="flex justify-end px-5 py-3 border-t border-border/30 bg-muted/10">
-                      <span className="text-xs text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
-                        Open Workspace <ArrowRight className="h-3.5 w-3.5" />
-                      </span>
+                      {ws.status === 'pending' ? (
+                        <span className="text-xs text-amber-500 flex items-center gap-1 transition-all">
+                          Check email to join
+                        </span>
+                      ) : (
+                        <span className="text-xs text-primary flex items-center gap-1 group-hover:gap-2 transition-all">
+                          Open Workspace <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                      )}
                     </div>
                   </button>
                 </motion.div>
@@ -263,6 +289,16 @@ export default function WorkspacesPage() {
           </AnimatePresence>
         </motion.div>
       )}
+
+      <ConfirmDialog
+        isOpen={alertOpen}
+        onClose={() => setAlertOpen(false)}
+        onConfirm={() => {}}
+        title="Notice"
+        description={alertMessage}
+        confirmText="OK"
+        hideCancel={true}
+      />
     </div>
   )
 }

@@ -10,6 +10,9 @@ const Paper = require('../models/Paper');
 const Keyword = require('../models/Keyword');
 const corpusService = require('./corpusService');
 const authorKeywordService = require('./authorKeywordService');
+const jwt = require('jsonwebtoken');
+const envConfig = require('../config/env');
+const emailService = require('./emailService');
 
 const roleRank = {
   viewer: 1,
@@ -100,9 +103,9 @@ const getMembership = async (workspaceId, userId) => {
     return { workspace, role: 'owner' };
   }
 
-  const member = await WorkspaceMember.findOne({ workspaceId, userId });
+  const member = await WorkspaceMember.findOne({ workspaceId, userId, status: 'active' });
   if (!member) {
-    throw createError('You do not have access to this workspace', 403);
+    throw createError('You do not have access to this workspace or have not accepted the invitation', 403);
   }
 
   return { workspace, role: member.role };
@@ -132,6 +135,7 @@ const createWorkspace = async (userId, { name, description, visibility = 'privat
     userId,
     role: 'owner',
     invitedBy: userId,
+    status: 'active',
   });
 
   return workspace;
@@ -157,10 +161,13 @@ const deleteWorkspace = async (workspaceId, userId) => {
 const listWorkspaces = async (userId, { page = 1, limit = 20 } = {}) => {
   const safeLimit = parseLimit(limit, 20, 100);
   const safePage = Math.max(parseInt(page, 10) || 1, 1);
-  const memberships = await WorkspaceMember.find({ userId }).select('workspaceId role');
+  const memberships = await WorkspaceMember.find({ userId }).select('workspaceId role status');
   const workspaceIds = memberships.map(member => member.workspaceId);
   const roleByWorkspace = new Map(
     memberships.map(member => [String(member.workspaceId), member.role])
+  );
+  const statusByWorkspace = new Map(
+    memberships.map(member => [String(member.workspaceId), member.status])
   );
 
   const filter = {
@@ -181,6 +188,7 @@ const listWorkspaces = async (userId, { page = 1, limit = 20 } = {}) => {
     workspaces: workspaces.map(workspace => ({
       ...workspace,
       role: roleByWorkspace.get(String(workspace._id)) || 'viewer',
+      status: statusByWorkspace.get(String(workspace._id)) || 'active',
     })),
     total,
     page: safePage,
@@ -230,13 +238,111 @@ const addMember = async (workspaceId, userId, { userId: targetUserId, email, rol
       workspaceId,
       userId: targetUser._id,
       role,
+      status: 'pending',
       invitedBy: userId,
       joinedAt: new Date(),
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).populate('userId', 'name email role institution');
 
+  // Generate join token
+  const token = jwt.sign(
+    { workspaceId: workspaceId.toString(), userId: targetUser._id.toString() },
+    envConfig.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  const joinUrl = `${envConfig.CLIENT_URL}/workspaces/${workspaceId}/join?token=${token}`;
+  
+  // Get inviter and workspace details
+  const [inviter, workspace] = await Promise.all([
+    User.findById(userId),
+    Workspace.findById(workspaceId)
+  ]);
+
+  await emailService.sendWorkspaceInvitationEmail(
+    targetUser.email,
+    inviter.name || inviter.email,
+    workspace.name,
+    joinUrl
+  );
+
   return member;
+};
+
+const joinWorkspace = async (workspaceId, userId, token) => {
+  ensureObjectId(workspaceId, 'workspaceId');
+  if (!token) throw createError('Invitation token is required', 400);
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, envConfig.JWT_SECRET);
+  } catch (err) {
+    throw createError('Invalid or expired invitation token', 400);
+  }
+
+  if (decoded.workspaceId !== workspaceId.toString() || decoded.userId !== userId.toString()) {
+    throw createError('Invalid invitation token for this user and workspace', 400);
+  }
+
+  const member = await WorkspaceMember.findOne({ workspaceId, userId });
+  if (!member) {
+    throw createError('You are not invited to this workspace', 403);
+  }
+
+  member.status = 'active';
+  await member.save();
+
+  return { success: true, message: 'Successfully joined workspace' };
+};
+
+const listMembers = async (workspaceId, userId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'viewer');
+  
+  const members = await WorkspaceMember.find({ workspaceId })
+    .populate('userId', 'name email role institution')
+    .sort({ joinedAt: -1 });
+
+  return members;
+};
+
+const removeMember = async (workspaceId, userId, targetUserId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'owner');
+  ensureObjectId(targetUserId, 'targetUserId');
+
+  if (userId.toString() === targetUserId.toString()) {
+    throw createError('You cannot kick yourself. Use leave instead.', 400);
+  }
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (workspace.owner.toString() === targetUserId.toString()) {
+    throw createError('Cannot kick the workspace owner', 400);
+  }
+
+  const member = await WorkspaceMember.findOneAndDelete({ workspaceId, userId: targetUserId });
+  if (!member) {
+    throw createError('Member not found in this workspace', 404);
+  }
+
+  return { success: true, message: 'Member removed successfully' };
+};
+
+const leaveWorkspace = async (workspaceId, userId) => {
+  ensureObjectId(workspaceId, 'workspaceId');
+
+  const workspace = await Workspace.findById(workspaceId);
+  if (!workspace) throw createError('Workspace not found', 404);
+
+  if (workspace.owner.toString() === userId.toString()) {
+    throw createError('Owner cannot leave workspace. Delete it or transfer ownership.', 400);
+  }
+
+  const member = await WorkspaceMember.findOneAndDelete({ workspaceId, userId });
+  if (!member) {
+    throw createError('You are not a member of this workspace', 400);
+  }
+
+  return { success: true, message: 'You have left the workspace' };
 };
 
 const findOrCreatePaper = async paperInput => {
@@ -305,7 +411,69 @@ const addPaper = async (workspaceId, userId, { paperId, paper, tags, note, sourc
     { new: true, upsert: true, setDefaultsOnInsert: true }
   ).populate('paperId', 'title abstract publicationYear citationCount journalName doi source url keywords keywordIds');
 
+  // Trigger alert logic
+  try {
+    const WorkspaceAlert = require('../models/WorkspaceAlert');
+    const Notification = require('../models/Notification');
+    const User = require('../models/User');
+    const WorkspaceMember = require('../models/WorkspaceMember');
+    
+    const alerts = await WorkspaceAlert.find({ workspaceId, notifyEnabled: true });
+    
+    if (alerts.length > 0) {
+      const pTitle = (paperDoc.title || '').toLowerCase();
+      const pAbstract = (paperDoc.abstract || '').toLowerCase();
+      const pKeywords = (paperDoc.keywords || []).map(k => (typeof k === 'string' ? k.toLowerCase() : ''));
+      const addedByUser = await User.findById(userId).select('name');
+      const addedByName = addedByUser ? addedByUser.name : 'Someone';
+      
+      const workspaceMembers = await WorkspaceMember.find({ workspaceId, status: 'active' });
+      
+      for (const alert of alerts) {
+        const keyword = alert.keyword.toLowerCase();
+        const isMatch = pTitle.includes(keyword) || 
+                        pAbstract.includes(keyword) || 
+                        pKeywords.some(k => k.includes(keyword));
+                        
+        if (isMatch) {
+          for (const member of workspaceMembers) {
+            if (member.userId.toString() !== userId.toString()) {
+              const newNotification = await Notification.create({
+                userId: member.userId,
+                title: `Keyword Alert: ${alert.keyword}`,
+                message: `A new paper matching "${alert.keyword}" was added to your workspace by ${addedByName}.`,
+                type: 'newPaper',
+                refId: paperDoc._id,
+                refType: 'paper'
+              });
+              
+              const socketService = require('./socketService');
+              socketService.sendNotificationToUser(member.userId, newNotification);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error triggering alerts:", err);
+  }
+
   return workspacePaper;
+};
+
+const removePaper = async (workspaceId, userId, paperId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'editor');
+  ensureObjectId(paperId, 'paperId');
+  
+  const WorkspacePaper = require('../models/WorkspacePaper');
+  const result = await WorkspacePaper.findOneAndDelete({ workspaceId, paperId });
+  
+  if (!result) {
+    const { createError } = require('../utils/errors');
+    throw createError('Paper not found in workspace', 404);
+  }
+  
+  return result;
 };
 
 const listPapers = async (workspaceId, userId, { page = 1, limit = 20, tag } = {}) => {
@@ -320,7 +488,7 @@ const listPapers = async (workspaceId, userId, { page = 1, limit = 20, tag } = {
       .sort({ createdAt: -1 })
       .skip((safePage - 1) * safeLimit)
       .limit(safeLimit)
-      .populate('paperId', 'title abstract publicationYear citationCount journalName doi source url keywords keywordIds')
+      .populate('paperId', 'title abstract authors publicationYear citationCount journalName doi source url keywords keywordIds')
       .populate('addedBy', 'name email'),
     WorkspacePaper.countDocuments(filter),
   ]);
@@ -328,32 +496,7 @@ const listPapers = async (workspaceId, userId, { page = 1, limit = 20, tag } = {
   return { papers, total, page: safePage, limit: safeLimit };
 };
 
-const createCorpusRun = async (
-  workspaceId,
-  userId,
-  { seedKeyword, source, startYear, endYear, maxPages, perPage }
-) => {
-  await assertWorkspaceRole(workspaceId, userId, 'editor');
 
-  const run = await corpusService.createRun({
-    seedKeyword,
-    source,
-    startYear,
-    endYear,
-    maxPages,
-    perPage,
-    createdBy: userId,
-  });
-
-  const workspaceCorpus = await WorkspaceCorpus.create({
-    workspaceId,
-    analysisRunId: run._id,
-    seedKeyword: run.seedKeyword,
-    createdBy: userId,
-  });
-
-  return { run, workspaceCorpus };
-};
 
 const createNote = async (workspaceId, userId, { paperId, title, content, tags }) => {
   await assertWorkspaceRole(workspaceId, userId, 'editor');
@@ -410,6 +553,30 @@ const createAlert = async (workspaceId, userId, { keyword, type = 'keyword', not
 const listAlerts = async (workspaceId, userId) => {
   await assertWorkspaceRole(workspaceId, userId, 'viewer');
   return WorkspaceAlert.find({ workspaceId }).sort({ createdAt: -1 });
+};
+
+const deleteAlert = async (workspaceId, userId, alertId) => {
+  await assertWorkspaceRole(workspaceId, userId, 'editor');
+  ensureObjectId(alertId, 'alertId');
+
+  const alert = await WorkspaceAlert.findOneAndDelete({ _id: alertId, workspaceId });
+  if (!alert) throw createError('Alert not found', 404);
+
+  return { success: true, message: 'Alert deleted successfully' };
+};
+
+const updateAlert = async (workspaceId, userId, alertId, { notifyEnabled }) => {
+  await assertWorkspaceRole(workspaceId, userId, 'editor');
+  ensureObjectId(alertId, 'alertId');
+
+  const alert = await WorkspaceAlert.findOneAndUpdate(
+    { _id: alertId, workspaceId },
+    { notifyEnabled },
+    { new: true }
+  );
+  if (!alert) throw createError('Alert not found', 404);
+
+  return alert;
 };
 
 const getWorkspacePaperFilter = async workspaceId => {
@@ -650,13 +817,19 @@ module.exports = {
   listWorkspaces,
   getWorkspaceById,
   addMember,
+  joinWorkspace,
+  listMembers,
+  removeMember,
+  leaveWorkspace,
   addPaper,
+  removePaper,
   listPapers,
-  createCorpusRun,
   createNote,
   listNotes,
   createAlert,
   listAlerts,
+  deleteAlert,
+  updateAlert,
   getTrends,
   getKeywordGraph,
   assertWorkspaceRole,

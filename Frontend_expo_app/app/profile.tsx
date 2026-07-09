@@ -22,6 +22,11 @@ import {
   Save,
   Building,
   CheckCircle,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Library,
+  Database
 } from 'lucide-react-native';
 import api from '../lib/api';
 import { Colors } from '../constants/theme';
@@ -99,6 +104,7 @@ export default function ProfileScreen() {
         setUser(res.data.user);
         await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
         setProfileSuccess('Profile updated successfully!');
+        setTimeout(() => setProfileSuccess(''), 3000);
       }
     } catch (err) {
       console.error(err);
@@ -131,7 +137,10 @@ export default function ProfileScreen() {
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
-        setTimeout(() => setShowPasswordForm(false), 2000);
+        setTimeout(() => {
+          setShowPasswordForm(false);
+          setPasswordSuccess('');
+        }, 2000);
       }
     } catch (err: any) {
       setPasswordError(err.response?.data?.message || 'Failed to update password.');
@@ -157,339 +166,202 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={[styles.centerContainer, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.text }}>Profile not loaded.</Text>
+        <Text style={{ color: theme.text }}>Please login to view your profile.</Text>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: theme.primary, marginTop: 16 }]} onPress={() => router.push('/login')}>
+          <Text style={styles.primaryBtnText}>Go to Login</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 20) }]}>
-
-      {/* Decorative Banner */}
-      <View style={[styles.banner, { backgroundColor: theme.primary + '15' }]}>
-        <View style={[styles.avatarContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <UserIcon size={44} color={theme.primary} />
-        </View>
-        <Text style={[styles.profileName, { color: theme.text }]}>{user.name}</Text>
-        <Text style={[styles.profileEmail, { color: theme.muted }]}>{user.email}</Text>
-        <View style={[styles.roleBadge, { backgroundColor: theme.primary + '20' }]}>
-          <Shield size={12} color={theme.primary} style={{ marginRight: 4 }} />
-          <Text style={[styles.roleText, { color: theme.primary }]}>{user.role.toUpperCase()}</Text>
-        </View>
+    <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <ChevronLeft size={24} color={theme.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Settings & Profile</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Quick Stats */}
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.cardHeader}>
-          <Activity size={18} color={theme.primary} />
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Account Information</Text>
-        </View>
-        <View style={styles.statsRow}>
-          <Text style={[styles.statsLabel, { color: theme.muted }]}>Member Since</Text>
-          <Text style={[styles.statsValue, { color: theme.text }]}>
-            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
-          </Text>
-        </View>
-        <View style={styles.statsRow}>
-          <Text style={[styles.statsLabel, { color: theme.muted }]}>Saved Bookmarks</Text>
-          <Text style={[styles.statsValue, { color: theme.text }]}>{user.bookmarks?.length || 0}</Text>
-        </View>
-      </View>
-
-      {/* General Settings */}
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.cardHeader}>
-          <UserIcon size={18} color={theme.primary} />
-          <Text style={[styles.cardTitle, { color: theme.text }]}>General Information</Text>
-        </View>
-
-        {profileSuccess ? (
-          <View style={[styles.successBox, { backgroundColor: theme.success + '15', borderColor: theme.success + '30' }]}>
-            <CheckCircle size={14} color={theme.success} style={{ marginRight: 6 }} />
-            <Text style={[styles.successText, { color: theme.success }]}>{profileSuccess}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Profile Card */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.profileHeaderRow}>
+            <View style={[styles.avatar, { backgroundColor: theme.primary + '20' }]}>
+              <Text style={[styles.avatarText, { color: theme.primary }]}>
+                {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.userName, { color: theme.text }]}>{user.name}</Text>
+              <Text style={[styles.userEmail, { color: theme.mutedForeground }]}>{user.email}</Text>
+              <View style={[styles.roleBadge, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
+                <Shield size={12} color={theme.primary} style={{ marginRight: 4 }} />
+                <Text style={[styles.roleText, { color: theme.primary }]}>{user.role.toUpperCase()}</Text>
+              </View>
+            </View>
           </View>
-        ) : null}
+        </View>
 
-        <Text style={[styles.inputLabel, { color: theme.muted }]}>FULL NAME</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-        />
+        {/* Account Features */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Features</Text>
+          
+          <TouchableOpacity 
+            style={[styles.featureRow, { borderBottomColor: theme.border, borderBottomWidth: 1 }]}
+            onPress={() => router.push('/library')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Library size={20} color={theme.primary} style={{ marginRight: 12 }} />
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>My Library (Bookmarks)</Text>
+            </View>
+            <ChevronRight size={20} color={theme.icon} />
+          </TouchableOpacity>
 
-        <Text style={[styles.inputLabel, { color: theme.muted }]}>INSTITUTION</Text>
-        <TextInput
-          value={institution}
-          onChangeText={setInstitution}
-          placeholder="FPT University"
-          placeholderTextColor={theme.muted}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-        />
+          <TouchableOpacity 
+            style={[styles.featureRow, user.role === 'admin' ? { borderBottomColor: theme.border, borderBottomWidth: 1 } : {}]}
+            onPress={() => router.push('/corpus')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Database size={20} color={theme.primary} style={{ marginRight: 12 }} />
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>Corpus Management</Text>
+            </View>
+            <ChevronRight size={20} color={theme.icon} />
+          </TouchableOpacity>
 
-        <Text style={[styles.inputLabel, { color: theme.muted }]}>BIO</Text>
-        <TextInput
-          value={bio}
-          onChangeText={setBio}
-          placeholder="Research bio..."
-          placeholderTextColor={theme.muted}
-          multiline
-          numberOfLines={4}
-          style={[
-            styles.input,
-            {
-              color: theme.text,
-              backgroundColor: theme.background,
-              borderColor: theme.border,
-              height: 80,
-              textAlignVertical: 'top',
-            },
-          ]}
-        />
-
-        <Text style={[styles.inputLabel, { color: theme.muted }]}>RESEARCH INTERESTS</Text>
-        <TextInput
-          value={interests}
-          onChangeText={setInterests}
-          placeholder="LLM, Graph Networks, Bioinformatics"
-          placeholderTextColor={theme.muted}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-        />
-
-        <TouchableOpacity
-          onPress={handleSaveProfile}
-          disabled={isSavingProfile}
-          style={[styles.saveBtn, { backgroundColor: theme.primary }]}
-        >
-          {isSavingProfile ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Save size={16} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.saveBtnText}>Save Profile</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Security Settings */}
-      <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <TouchableOpacity
-          onPress={() => setShowPasswordForm(!showPasswordForm)}
-          style={styles.securityHeaderToggle}
-        >
-          <Key size={18} color="#f97316" />
-          <Text style={[styles.cardTitle, { color: theme.text, flex: 1, marginLeft: 8 }]}>
-            Security Settings
-          </Text>
-          <Text style={{ color: theme.primary, fontSize: 13, fontWeight: 'bold' }}>
-            {showPasswordForm ? 'Cancel' : 'Change Password'}
-          </Text>
-        </TouchableOpacity>
-
-        {passwordSuccess ? (
-          <Text style={[styles.successText, { color: theme.success, marginTop: 8 }]}>{passwordSuccess}</Text>
-        ) : null}
-        {passwordError ? (
-          <Text style={[styles.errorText, { color: theme.destructive, marginTop: 8 }]}>{passwordError}</Text>
-        ) : null}
-
-        {showPasswordForm && (
-          <View style={styles.passwordForm}>
-            <Text style={[styles.inputLabel, { color: theme.muted }]}>CURRENT PASSWORD</Text>
-            <TextInput
-              secureTextEntry
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-            />
-            <Text style={[styles.inputLabel, { color: theme.muted }]}>NEW PASSWORD</Text>
-            <TextInput
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-              style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-            />
-            <Text style={[styles.inputLabel, { color: theme.muted }]}>CONFIRM NEW PASSWORD</Text>
-            <TextInput
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-            />
-
-            <TouchableOpacity
-              onPress={handleUpdatePassword}
-              disabled={isSavingPassword}
-              style={[styles.passwordSubmitBtn, { backgroundColor: '#f97316' }]}
+          {user.role === 'admin' && (
+            <TouchableOpacity 
+              style={styles.featureRow}
+              onPress={() => router.push('/admin/dashboard')}
             >
-              {isSavingPassword ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.saveBtnText}>Update Password</Text>
-              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Shield size={20} color={theme.destructive} style={{ marginRight: 12 }} />
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: '500' }}>Admin Dashboard</Text>
+              </View>
+              <ChevronRight size={20} color={theme.icon} />
             </TouchableOpacity>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
 
-      {/* Logout */}
-      <TouchableOpacity
-        onPress={handleLogout}
-        style={[styles.logoutBtn, { borderColor: theme.destructive }]}
-      >
-        <LogOut size={18} color={theme.destructive} style={{ marginRight: 8 }} />
-        <Text style={[styles.logoutText, { color: theme.destructive }]}>Logout Account</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* Edit Profile Details */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Personal Details</Text>
+          
+          <Text style={[styles.label, { color: theme.mutedForeground }]}>Full Name</Text>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <UserIcon size={16} color={theme.icon} style={styles.inputIcon} />
+            <TextInput value={name} onChangeText={setName} style={[styles.input, { color: theme.text }]} placeholderTextColor={theme.mutedForeground} />
+          </View>
+
+          <Text style={[styles.label, { color: theme.mutedForeground }]}>Institution</Text>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Building size={16} color={theme.icon} style={styles.inputIcon} />
+            <TextInput value={institution} onChangeText={setInstitution} style={[styles.input, { color: theme.text }]} placeholder="University / Organization" placeholderTextColor={theme.mutedForeground} />
+          </View>
+
+          <Text style={[styles.label, { color: theme.mutedForeground }]}>Bio</Text>
+          <TextInput value={bio} onChangeText={setBio} multiline style={[styles.textArea, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]} placeholder="Tell us about your research..." placeholderTextColor={theme.mutedForeground} />
+
+          <Text style={[styles.label, { color: theme.mutedForeground }]}>Interests (comma separated)</Text>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Activity size={16} color={theme.icon} style={styles.inputIcon} />
+            <TextInput value={interests} onChangeText={setInterests} style={[styles.input, { color: theme.text }]} placeholder="Machine Learning, NLP..." placeholderTextColor={theme.mutedForeground} />
+          </View>
+
+          {profileSuccess ? (
+            <View style={[styles.successBox, { backgroundColor: theme.success + '15', borderColor: theme.success + '30' }]}>
+              <CheckCircle size={16} color={theme.success} style={{ marginRight: 6 }} />
+              <Text style={{ color: theme.success, fontSize: 13 }}>{profileSuccess}</Text>
+            </View>
+          ) : null}
+
+          <TouchableOpacity onPress={handleSaveProfile} disabled={isSavingProfile} style={[styles.primaryBtn, { backgroundColor: theme.primary, marginTop: 12 }]}>
+            {isSavingProfile ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Save size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.primaryBtnText}>Save Profile</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Security / Password */}
+        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity onPress={() => setShowPasswordForm(!showPasswordForm)} style={styles.rowBetween}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Key size={20} color={theme.primary} style={{ marginRight: 12 }} />
+              <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Change Password</Text>
+            </View>
+            <Text style={{ color: theme.primary, fontSize: 24 }}>{showPasswordForm ? '-' : '+'}</Text>
+          </TouchableOpacity>
+
+          {showPasswordForm && (
+            <View style={{ marginTop: 16 }}>
+              {passwordError ? <Text style={{ color: theme.destructive, fontSize: 13, marginBottom: 12 }}>{passwordError}</Text> : null}
+              {passwordSuccess ? <Text style={{ color: theme.success, fontSize: 13, marginBottom: 12 }}>{passwordSuccess}</Text> : null}
+
+              <Text style={[styles.label, { color: theme.mutedForeground }]}>Current Password</Text>
+              <TextInput value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry style={[styles.simpleInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]} />
+
+              <Text style={[styles.label, { color: theme.mutedForeground }]}>New Password</Text>
+              <TextInput value={newPassword} onChangeText={setNewPassword} secureTextEntry style={[styles.simpleInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]} />
+
+              <Text style={[styles.label, { color: theme.mutedForeground }]}>Confirm New Password</Text>
+              <TextInput value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry style={[styles.simpleInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]} />
+
+              <TouchableOpacity onPress={handleUpdatePassword} disabled={isSavingPassword} style={[styles.primaryBtn, { backgroundColor: theme.primary, marginTop: 12 }]}>
+                {isSavingPassword ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Update Password</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Danger Zone */}
+        <TouchableOpacity onPress={handleLogout} style={[styles.logoutBtn, { backgroundColor: theme.destructive + '15', borderColor: theme.destructive + '40' }]}>
+          <LogOut size={20} color={theme.destructive} style={{ marginRight: 8 }} />
+          <Text style={[styles.logoutText, { color: theme.destructive }]}>Log Out</Text>
+        </TouchableOpacity>
+
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 60,
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  banner: {
-    borderRadius: 20,
-    paddingVertical: 30,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 2,
-  },
-  profileEmail: {
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  roleText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eaeaea20',
-  },
-  statsLabel: {
-    fontSize: 13,
-  },
-  statsValue: {
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 10,
-    marginBottom: 14,
-  },
-  successText: {
-    fontSize: 12,
-  },
-  errorText: {
-    fontSize: 12,
-  },
-  inputLabel: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginBottom: 6,
-    marginTop: 12,
-    letterSpacing: 0.5,
-  },
-  input: {
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 13,
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 40,
-    borderRadius: 10,
-    marginTop: 20,
-  },
-  saveBtnText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  securityHeaderToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  passwordForm: {
-    marginTop: 10,
-    gap: 4,
-  },
-  passwordSubmitBtn: {
-    height: 40,
-    borderRadius: 10,
-    marginTop: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  logoutText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
+  container: { flex: 1 },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'transparent' },
+  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  scrollContent: { padding: 20, gap: 16, paddingBottom: 60 },
+  
+  card: { borderRadius: 20, borderWidth: 1, padding: 20 },
+  profileHeaderRow: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  avatarText: { fontSize: 24, fontWeight: '700' },
+  userName: { fontSize: 20, fontWeight: '700', marginBottom: 2 },
+  userEmail: { fontSize: 14, marginBottom: 8 },
+  roleBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  roleText: { fontSize: 10, fontWeight: '800' },
+  
+  featureRow: { paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  
+  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '500', marginBottom: 6, marginTop: 10 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, height: 44, paddingHorizontal: 12 },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, fontSize: 14 },
+  simpleInput: { borderWidth: 1, borderRadius: 12, height: 44, paddingHorizontal: 12, fontSize: 14 },
+  textArea: { borderWidth: 1, borderRadius: 12, minHeight: 80, paddingHorizontal: 12, paddingTop: 12, fontSize: 14, textAlignVertical: 'top' },
+  
+  primaryBtn: { flexDirection: 'row', height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  
+  successBox: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 12 },
+  
+  logoutBtn: { flexDirection: 'row', height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  logoutText: { fontSize: 15, fontWeight: '600' },
 });

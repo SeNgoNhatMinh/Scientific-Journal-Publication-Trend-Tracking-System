@@ -19,6 +19,11 @@ const workspaceMemberSchema = new mongoose.Schema(
       enum: ['owner', 'editor', 'viewer'],
       default: 'viewer',
     },
+    status: {
+      type: String,
+      enum: ['pending', 'active'],
+      default: 'pending',
+    },
     invitedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

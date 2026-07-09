@@ -2,7 +2,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Search, Bell, User, BookOpen, TrendingUp, Brain, Database, Library, LayoutDashboard, X, Menu, Sun, Moon, Shield } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import api from "@/lib/api"
+import { io } from "socket.io-client"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +61,66 @@ export default function Navbar() {
   const user = userStr ? JSON.parse(userStr) : null
   const isLoggedIn = !!token
   const isAdmin = user?.role === 'admin'
+
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!isLoggedIn) return
+    const fetchUnread = async () => {
+      try {
+        const res = await api.get('/notifications/unread-count')
+        setUnreadCount(res.data.unreadCount || 0)
+      } catch (err) {}
+    }
+    fetchUnread()
+
+    // Determine the socket URL base. 
+    // If baseURL is relative (e.g. '/api/v1' using Vite proxy), use window.location.origin
+    const baseUrl = String(api.defaults.baseURL || "")
+    const socketUrl = baseUrl.startsWith("/") 
+      ? window.location.origin 
+      : baseUrl.replace(/\/api\/v1\/?$/, "")
+
+    const socket = io(socketUrl, {
+      auth: { token }
+    })
+
+    socket.on("newNotification", (payload) => {
+      setUnreadCount((prev) => prev + 1)
+      setNotifications((prev) => [payload, ...prev].slice(0, 10))
+    })
+
+    return () => {
+      socket.disconnect()
+    }
+  }, [isLoggedIn, token])
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/notifications?limit=10')
+      setNotifications(res.data.notifications || [])
+    } catch (err) {}
+  }
+
+  const markAllAsRead = async () => {
+    try {
+      await api.patch('/notifications/read-all')
+      setNotifications(notifications.map(n => ({...n, isRead: true})))
+      setUnreadCount(0)
+    } catch (err) {}
+  }
+
+  const deleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await api.delete(`/notifications/${id}`)
+      setNotifications(prev => prev.filter(n => n._id !== id))
+      
+      const res = await api.get('/notifications/unread-count')
+      setUnreadCount(res.data.unreadCount || 0)
+    } catch (err) {}
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -146,10 +208,48 @@ export default function Navbar() {
           </Button>
           {isLoggedIn ? (
             <>
-              <Button variant="ghost" size="icon" className="relative h-8 w-8 hidden sm:flex">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
-              </Button>
+              <DropdownMenu onOpenChange={(open) => { if (open) fetchNotifications() }}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative h-8 w-8 hidden sm:flex outline-none ring-2 ring-transparent hover:ring-primary/40 transition-all rounded-full">
+                    <Bell className="h-4 w-4" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground shadow-sm ring-1 ring-background">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-80 glass p-0" align="end">
+                  <div className="flex items-center justify-between p-3 border-b border-border/40">
+                    <span className="text-sm font-semibold">Notifications</span>
+                    {unreadCount > 0 && (
+                      <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-primary hover:text-primary/80" onClick={markAllAsRead}>
+                        Mark all as read
+                      </Button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground">No new notifications</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n._id} className={`p-3 border-b border-border/40 text-sm relative group ${!n.isRead ? 'bg-primary/5' : ''}`}>
+                          <div className="font-semibold mb-0.5 text-[13px] pr-5">{n.title}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-2 pr-2">{n.message}</div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => deleteNotification(n._id, e)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger className="relative inline-flex h-8 w-8 items-center justify-center rounded-full outline-none ring-2 ring-transparent hover:ring-primary/40 transition-all">
                   <Avatar className="h-8 w-8">

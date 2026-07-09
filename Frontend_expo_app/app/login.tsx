@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   useColorScheme,
+  ImageBackground,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +29,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState('student'); // student, researcher, lecturer
+  const [role, setRole] = useState('student');
   const [institution, setInstitution] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +40,6 @@ export default function LoginScreen() {
       setError('Please fill out all required fields.');
       return;
     }
-
     setIsLoading(true);
     setError('');
 
@@ -58,7 +58,6 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
       }
 
-      // If user is admin, redirect to admin dashboard (or can let them go to main dashboard with admin access)
       if (res.data.user?.role === 'admin') {
         router.replace('/admin/dashboard');
       } else {
@@ -82,38 +81,24 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.container, { backgroundColor: theme.background }]}
-    >
-      <ScrollView 
-        contentContainerStyle={[
-          styles.scrollContent, 
-          { 
-            paddingTop: Math.max(insets.top + 10, 30), 
-            paddingBottom: Math.max(insets.bottom + 20, 40) 
-          }
-        ]} 
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Back to Home Button */}
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: theme.background }]}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top + 10, 30), paddingBottom: Math.max(insets.bottom + 20, 40) }]} keyboardShouldPersistTaps="handled">
+        
         <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={styles.backButton}>
           <ArrowLeft size={18} color={theme.text} />
           <Text style={[styles.backText, { color: theme.text }]}>Back to Home</Text>
         </TouchableOpacity>
 
-        {/* Header Branding */}
         <View style={styles.brandContainer}>
-          <View style={[styles.logoBg, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
-            <BookOpen size={32} color={theme.primary} />
+          <View style={[styles.logoBg, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '40', borderWidth: 1 }]}>
+            <BookOpen size={36} color={theme.primary} />
           </View>
           <Text style={[styles.brandText, { color: theme.text }]}>SciTrend</Text>
-          <Text style={[styles.subBrandText, { color: theme.muted }]}>
+          <Text style={[styles.subBrandText, { color: theme.mutedForeground }]}>
             {isLogin ? 'Sign in to track publication trends' : 'Join SciTrend to discover emerging research'}
           </Text>
         </View>
 
-        {/* Card Form */}
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.title, { color: theme.text }]}>
             {isLogin ? 'Welcome Back' : 'Create Account'}
@@ -125,7 +110,6 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          {/* Registration Extra Fields */}
           {!isLogin && (
             <>
               <Text style={[styles.label, { color: theme.text }]}>Full Name</Text>
@@ -135,7 +119,7 @@ export default function LoginScreen() {
                   value={name}
                   onChangeText={setName}
                   placeholder="John Doe"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   style={[styles.input, { color: theme.text }]}
                   autoCapitalize="words"
                 />
@@ -149,31 +133,25 @@ export default function LoginScreen() {
                     onPress={() => setRole(r)}
                     style={[
                       styles.roleButton,
-                      { borderColor: theme.border },
-                      role === r && { backgroundColor: theme.primary, borderColor: theme.primary },
+                      { borderColor: theme.border, backgroundColor: theme.background },
+                      role === r && { borderColor: theme.primary, backgroundColor: theme.primary + '15' },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.roleButtonText,
-                        { color: theme.text },
-                        role === r && { color: '#ffffff', fontWeight: 'bold' },
-                      ]}
-                    >
+                    <Text style={[styles.roleText, { color: role === r ? theme.primary : theme.mutedForeground }]}>
                       {r.charAt(0).toUpperCase() + r.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={[styles.label, { color: theme.text }]}>Institution / University</Text>
+              <Text style={[styles.label, { color: theme.text }]}>Institution</Text>
               <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
                 <Building size={18} color={theme.icon} style={styles.inputIcon} />
                 <TextInput
                   value={institution}
                   onChangeText={setInstitution}
-                  placeholder="FPT University (Optional)"
-                  placeholderTextColor={theme.muted}
+                  placeholder="University / Organization"
+                  placeholderTextColor={theme.mutedForeground}
                   style={[styles.input, { color: theme.text }]}
                   autoCapitalize="words"
                 />
@@ -181,22 +159,21 @@ export default function LoginScreen() {
             </>
           )}
 
-          {/* Email */}
-          <Text style={[styles.label, { color: theme.text }]}>Email Address</Text>
+          <Text style={[styles.label, { color: theme.text }]}>Email</Text>
           <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <Mail size={18} color={theme.icon} style={styles.inputIcon} />
             <TextInput
               value={email}
               onChangeText={setEmail}
-              placeholder="name@domain.com"
-              placeholderTextColor={theme.muted}
+              placeholder="name@example.com"
+              placeholderTextColor={theme.mutedForeground}
               style={[styles.input, { color: theme.text }]}
-              autoCapitalize="none"
               keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
-          {/* Password */}
           <Text style={[styles.label, { color: theme.text }]}>Password</Text>
           <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <Lock size={18} color={theme.icon} style={styles.inputIcon} />
@@ -204,7 +181,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
-              placeholderTextColor={theme.muted}
+              placeholderTextColor={theme.mutedForeground}
               style={[styles.input, { color: theme.text }]}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
@@ -214,191 +191,46 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: theme.primary }]}
-            onPress={handleSubmit}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitButtonText}>{isLogin ? 'Sign In' : 'Create Account'}</Text>
-            )}
+          <TouchableOpacity style={[styles.submitButton, { backgroundColor: theme.primary }]} onPress={handleSubmit} disabled={isLoading}>
+            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>{isLogin ? 'Sign In' : 'Create Account'}</Text>}
           </TouchableOpacity>
         </View>
 
-        {/* Bottom Switch Links */}
-        <View style={styles.switchContainer}>
-          <Text style={[styles.switchText, { color: theme.muted }]}>
+        <TouchableOpacity onPress={toggleMode} style={styles.toggleContainer}>
+          <Text style={[styles.toggleText, { color: theme.mutedForeground }]}>
             {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            <Text style={{ color: theme.primary, fontWeight: 'bold' }}>{isLogin ? 'Sign up' : 'Sign in'}</Text>
           </Text>
-          <TouchableOpacity onPress={toggleMode}>
-            <Text style={[styles.switchLink, { color: theme.primary }]}>
-              {isLogin ? 'Sign up free' : 'Sign in'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Temporary Bypass Option (for testing ease) */}
-        <TouchableOpacity 
-          style={styles.bypassBtn} 
-          onPress={() => router.replace('/(tabs)')}
-        >
-          <Text style={[styles.bypassText, { color: theme.primary }]}>Explore without logging in →</Text>
         </TouchableOpacity>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    alignItems: 'stretch',
-  },
-  brandContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  logoBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  brandText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  subBrandText: {
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
-  card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 24,
-    shadowColor: '#000000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  errorBox: {
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    fontSize: 13,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 14,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    height: '100%',
-    fontSize: 14,
-  },
-  eyeIcon: {
-    padding: 8,
-  },
-  roleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  roleButton: {
-    flex: 1,
-    height: 38,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleButtonText: {
-    fontSize: 12,
-  },
-  submitButton: {
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    shadowColor: '#000000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  switchText: {
-    fontSize: 14,
-  },
-  switchLink: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  bypassBtn: {
-    alignItems: 'center',
-    marginTop: 24,
-    paddingVertical: 10,
-  },
-  bypassText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 20,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  container: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center' },
+  backButton: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 20 },
+  backText: { fontSize: 14, marginLeft: 6, fontWeight: '500' },
+  brandContainer: { alignItems: 'center', marginBottom: 32 },
+  logoBg: { width: 72, height: 72, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  brandText: { fontSize: 28, fontWeight: '800', marginBottom: 8, letterSpacing: 0.5 },
+  subBrandText: { fontSize: 14, textAlign: 'center' },
+  card: { borderRadius: 24, borderWidth: 1, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 8 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
+  label: { fontSize: 14, fontWeight: '500', marginBottom: 8, marginTop: 12 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, height: 48, paddingHorizontal: 12 },
+  inputIcon: { marginRight: 10 },
+  input: { flex: 1, height: '100%', fontSize: 15 },
+  eyeIcon: { padding: 8 },
+  roleContainer: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  roleButton: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  roleText: { fontSize: 12, fontWeight: '600' },
+  submitButton: { height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 28 },
+  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  toggleContainer: { marginTop: 24, alignItems: 'center' },
+  toggleText: { fontSize: 14 },
+  errorBox: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16 },
+  errorText: { fontSize: 13, textAlign: 'center' },
 });

@@ -78,6 +78,10 @@ app.get('/health', (req, res) => {
       status: dbStateLabel,
       connected: db.isConnected,
     },
+    openalex: {
+      apiKeyConfigured: Boolean(envConfig.OPENALEX_API_KEY),
+      mailto: envConfig.OPENALEX_MAILTO || null,
+    },
   });
 });
 
@@ -133,9 +137,14 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ║  Environment: ${envConfig.NODE_ENV}
 ║  API Docs: http://localhost:${PORT}/api-docs
 ║  Health Check: http://localhost:${PORT}/health
+║  OpenAlex key: ${envConfig.OPENALEX_API_KEY ? 'configured' : 'MISSING — search may 503'}
 ╚════════════════════════════════════════════════════════╝
   `);
 });
+
+// Initialize Socket.io
+const socketService = require('./services/socketService');
+socketService.init(server);
 
 // Graceful shutdown
 process.on('SIGINT', () => {

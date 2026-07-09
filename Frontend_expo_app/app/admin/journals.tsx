@@ -229,7 +229,7 @@ export default function AdminJournalsScreen() {
           <Search size={18} color={theme.icon} style={{ marginRight: 6 }} />
           <TextInput
             placeholder="Search journals by title..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.mutedForeground}
             value={search}
             onChangeText={setSearch}
             style={[styles.searchInput, { color: theme.text }]}
@@ -250,7 +250,7 @@ export default function AdminJournalsScreen() {
       ) : journals.length === 0 ? (
         <View style={styles.centerContainer}>
           <BookOpen size={48} color={theme.icon} style={{ opacity: 0.2, marginBottom: 12 }} />
-          <Text style={[styles.emptyText, { color: theme.muted }]}>No journals found.</Text>
+          <Text style={[styles.emptyText, { color: theme.mutedForeground }]}>No journals found.</Text>
         </View>
       ) : (
         <FlatList
@@ -262,7 +262,7 @@ export default function AdminJournalsScreen() {
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.cardTitle, { color: theme.text }]}>{item.title}</Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.muted }]}>
+                  <Text style={[styles.cardSubtitle, { color: theme.mutedForeground }]}>
                     {item.publisher || 'No Publisher'} {item.issn ? `| ISSN: ${item.issn}` : ''}
                   </Text>
                 </View>
@@ -301,7 +301,7 @@ export default function AdminJournalsScreen() {
                   ) : (
                     <>
                       <X size={14} color={theme.muted} />
-                      <Text style={[styles.actionBtnText, { color: theme.muted }]}>Not Tracked</Text>
+                      <Text style={[styles.actionBtnText, { color: theme.mutedForeground }]}>Not Tracked</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -354,10 +354,10 @@ export default function AdminJournalsScreen() {
 
             <ScrollView contentContainerStyle={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Journal Title *</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Journal Title *</Text>
                 <TextInput
                   placeholder="e.g. Journal of Machine Learning Research"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={title}
                   onChangeText={setTitle}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -366,20 +366,20 @@ export default function AdminJournalsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>ISSN</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>ISSN</Text>
                   <TextInput
                     placeholder="e.g. 1532-4435"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     value={issn}
                     onChangeText={setIssn}
                     style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>E-ISSN</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>E-ISSN</Text>
                   <TextInput
                     placeholder="e.g. 1533-5435"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     value={eissn}
                     onChangeText={setEissn}
                     style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -388,10 +388,10 @@ export default function AdminJournalsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Description</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Description</Text>
                 <TextInput
                   placeholder="Journal scope and overview..."
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   multiline
                   numberOfLines={3}
                   value={description}
@@ -411,10 +411,10 @@ export default function AdminJournalsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Categories (Comma-separated)</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Categories (Comma-separated)</Text>
                 <TextInput
                   placeholder="e.g. Computer Science, AI"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={categoryRaw}
                   onChangeText={setCategoryRaw}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -423,20 +423,20 @@ export default function AdminJournalsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Publisher</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Publisher</Text>
                   <TextInput
                     placeholder="e.g. JMLR"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     value={publisher}
                     onChangeText={setPublisher}
                     style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Field Domain</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Field Domain</Text>
                   <TextInput
                     placeholder="e.g. Computer Science"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     value={fieldDomain}
                     onChangeText={setFieldDomain}
                     style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -445,10 +445,10 @@ export default function AdminJournalsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Website URL</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Website URL</Text>
                 <TextInput
                   placeholder="e.g. https://www.jmlr.org/"
-                  placeholderTextColor={theme.muted}
+                  placeholderTextColor={theme.mutedForeground}
                   value={websiteUrl}
                   onChangeText={setWebsiteUrl}
                   style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
@@ -457,10 +457,10 @@ export default function AdminJournalsScreen() {
 
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Impact Factor</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Impact Factor</Text>
                   <TextInput
                     placeholder="e.g. 5.6"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     keyboardType="numeric"
                     value={impactFactor}
                     onChangeText={setImpactFactor}
@@ -468,10 +468,10 @@ export default function AdminJournalsScreen() {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>h5 Index</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>h5 Index</Text>
                   <TextInput
                     placeholder="e.g. 84"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     keyboardType="numeric"
                     value={h5Index}
                     onChangeText={setH5Index}
@@ -479,10 +479,10 @@ export default function AdminJournalsScreen() {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: theme.muted }]}>Paper Count</Text>
+                  <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Paper Count</Text>
                   <TextInput
                     placeholder="e.g. 1420"
-                    placeholderTextColor={theme.muted}
+                    placeholderTextColor={theme.mutedForeground}
                     keyboardType="numeric"
                     value={paperCount}
                     onChangeText={setPaperCount}
@@ -501,7 +501,7 @@ export default function AdminJournalsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.muted }]}>Data Source</Text>
+                <Text style={[styles.inputLabel, { color: theme.mutedForeground }]}>Data Source</Text>
                 <View style={styles.sourceSelectContainer}>
                   {['openalex', 'crossref', 'semantic_scholar'].map((src) => (
                     <TouchableOpacity

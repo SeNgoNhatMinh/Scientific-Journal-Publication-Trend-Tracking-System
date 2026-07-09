@@ -124,7 +124,7 @@ export default function AdminMonitoringScreen() {
       <View style={styles.topHeader}>
         <View style={styles.clockRow}>
           <Clock size={14} color={theme.icon} />
-          <Text style={[styles.clockText, { color: theme.muted }]}>
+          <Text style={[styles.clockText, { color: theme.mutedForeground }]}>
             {lastChecked ? `Last checked: ${lastChecked.toLocaleTimeString()}` : 'Checking...'}
           </Text>
         </View>
@@ -150,7 +150,7 @@ export default function AdminMonitoringScreen() {
           <Globe size={18} color={theme.primary} />
           <Text style={[styles.cardTitle, { color: theme.text }]}>External API Rate Limits</Text>
         </View>
-        <Text style={[styles.cardDesc, { color: theme.muted }]}>
+        <Text style={[styles.cardDesc, { color: theme.mutedForeground }]}>
           Estimated usage counts computed from active/completed runs.
         </Text>
 
@@ -173,7 +173,7 @@ export default function AdminMonitoringScreen() {
                     )}
                   </View>
                   <Text style={[styles.usageText, { color: theme.text }]}>
-                    {used} / <Text style={{ color: theme.muted }}>{config.limit}</Text>
+                    {used} / <Text style={{ color: theme.mutedForeground }}>{config.limit}</Text>
                   </Text>
                 </View>
 
@@ -191,7 +191,7 @@ export default function AdminMonitoringScreen() {
                 </View>
 
                 <View style={styles.usageFooterRow}>
-                  <Text style={[styles.usagePeriod, { color: theme.muted }]}>{config.period} quota</Text>
+                  <Text style={[styles.usagePeriod, { color: theme.mutedForeground }]}>{config.period} quota</Text>
                   <Text style={[styles.usagePct, { color: isWarn ? theme.destructive : theme.muted }]}>
                     {pct.toFixed(1)}% used
                   </Text>
@@ -208,7 +208,7 @@ export default function AdminMonitoringScreen() {
           <Server size={18} color={theme.primary} />
           <Text style={[styles.cardTitle, { color: theme.text }]}>Internal Services Health</Text>
         </View>
-        <Text style={[styles.cardDesc, { color: theme.muted }]}>
+        <Text style={[styles.cardDesc, { color: theme.mutedForeground }]}>
           Real-time ping checks of deployed endpoints.
         </Text>
 
@@ -224,7 +224,7 @@ export default function AdminMonitoringScreen() {
               <View key={srv.name} style={[styles.srvItem, { backgroundColor: theme.background, borderColor: theme.border }]}>
                 <View>
                   <Text style={[styles.srvName, { color: theme.text }]}>{srv.name}</Text>
-                  <Text style={[styles.srvSub, { color: theme.muted }]}>{srv.sub}</Text>
+                  <Text style={[styles.srvSub, { color: theme.mutedForeground }]}>{srv.sub}</Text>
                 </View>
 
                 <View
@@ -264,7 +264,7 @@ export default function AdminMonitoringScreen() {
           <Database size={18} color={theme.primary} />
           <Text style={[styles.cardTitle, { color: theme.text }]}>Database Metrics</Text>
         </View>
-        <Text style={[styles.cardDesc, { color: theme.muted }]}>
+        <Text style={[styles.cardDesc, { color: theme.mutedForeground }]}>
           Live indexed database documents counts.
         </Text>
 

@@ -27,6 +27,8 @@ const envConfig = {
   /** OpenAlex polite pool — thêm mailto vào mọi request (nhanh/ổn định hơn) */
   OPENALEX_MAILTO:
     process.env.OPENALEX_MAILTO || process.env.CROSSREF_MAILTO || 'youremail@gmail.com',
+  /** Free key from https://openalex.org/settings/api — required for reliable search */
+  OPENALEX_API_KEY: sanitizeEnv(process.env.OPENALEX_API_KEY) || '',
   EXTERNAL_API_TIMEOUT_MS:
     parseInt(process.env.EXTERNAL_API_TIMEOUT_MS, 10) ||
     (process.env.NODE_ENV === 'production' ? 90000 : 30000),
